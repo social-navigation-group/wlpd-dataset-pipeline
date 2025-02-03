@@ -38,4 +38,4 @@ By making a contribution to this project, I certify that:
 
 ### License
 
-[MIT License](LICENSE)
+[Apache 2.0 License](LICENSE)

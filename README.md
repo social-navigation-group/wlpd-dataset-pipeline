@@ -1,5 +1,5 @@
-# wlpd-dataset-pipeline
-A.K.A. World's Largest Pedestrian Dataset (WLPD)
+# dataset-pipeline
+<!-- A.K.A. World's Largest Pedestrian Dataset (WLPD) -->
 
 ### Developer Certificate of Origin (DCO)
 

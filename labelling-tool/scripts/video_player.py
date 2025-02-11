@@ -7,28 +7,28 @@ from PyQt6.QtWidgets import (
 )
 
 class VideoPlayer(QWidget):
-    def __init__(self, main_window):
+    def __init__(self, video_controls):
         super().__init__()
         self.cap = None
         self.video_fps = 30  
         self.total_frames = 0  
         self.video_path = None
-        self.main_window = main_window
+        self.video_controls = video_controls
         self.playback_mode = PlaybackMode.STOPPED
 
-        # Timers
+        # TIMERS
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
 
         self.playback_speed = 1  # Default speed (1x for normal, -1 for rewind, 2x for fast-forward)
 
-        # Graphics Scene
+        # GRAPHICS SCENE
         self.scene = QGraphicsScene(self)
         self.view = QGraphicsView(self.scene)
         self.pixmap_item = QGraphicsPixmapItem()
         self.scene.addItem(self.pixmap_item)
 
-        self.view.setMinimumSize(1092, 888)
+        self.view.setMinimumSize(1092, 888) # 1092, 888
         self.view.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.view.setStyleSheet("background-color: black;")
@@ -49,11 +49,11 @@ class VideoPlayer(QWidget):
             QMessageBox.warning(self, "Error", f"Failed to open video file from {path}")
             return
 
-        self.video_fps = int(self.cap.get(cv2.CAP_PROP_FPS))
+        self.video_fps = int(self.cap.get(cv2.CAP_PROP_FPS)) 
         self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-        self.main_window.max_frame_label.setText(str(self.total_frames))
-        self.main_window.frame_slider.setRange(0, self.total_frames)
+        self.video_controls.max_frame_label.setText(str(self.total_frames))
+        self.video_controls.frame_slider.setRange(0, self.total_frames)
 
         self.show_frame_at(0)
 
@@ -77,11 +77,11 @@ class VideoPlayer(QWidget):
 
         self.show_frame_at(new_frame)
 
-        # Stop if at boundaries
+        # STOP IF AT BOUNDARIES
         if new_frame == 0 or new_frame == self.total_frames - 1:
             self.timer.stop()
             self.playback_mode = PlaybackMode.STOPPED
-            self.main_window.play_pause_button.setIcon(QIcon("../resources/icons/play/play-60.png"))
+            self.video_controls.play_pause_button.setIcon(QIcon("../resources/icons/play/play-60.png"))
 
     def show_frame_at(self, frame_number):
         """Displays the frame at a given position."""
@@ -90,8 +90,8 @@ class VideoPlayer(QWidget):
             ret, frame = self.cap.read()
             if ret:
                 self.display_frame(frame)
-                self.main_window.current_frame_label.setText(str(frame_number))
-                self.main_window.frame_slider.setValue(frame_number)
+                self.video_controls.current_frame_label.setText(str(frame_number))
+                self.video_controls.frame_slider.setValue(frame_number)
 
     def display_frame(self, frame):
         """Converts the OpenCV frame to a QPixmap and displays it."""

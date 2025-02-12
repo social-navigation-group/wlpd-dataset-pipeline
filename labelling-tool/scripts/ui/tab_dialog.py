@@ -1,5 +1,5 @@
-from human_controls import HumanControls
-from trajectory_controls import TrajectoryControls
+from .human_controls import HumanControls
+from .trajectory_controls import TrajectoryControls
 from PyQt6.QtWidgets import QDialog, QWidget, QTabWidget, QVBoxLayout
 
 class TabDialog(QDialog):

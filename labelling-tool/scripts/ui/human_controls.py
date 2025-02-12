@@ -10,6 +10,7 @@ class HumanControls(QWidget):
         # SET TESTING IN THE LAYOUT
         self.setLayout(self.just_to_insert_something())
     
+    # THIS IS JUST TO PUT SOMETHING IN THE TAB 
     def just_to_insert_something(self):
         if len(sys.argv) >= 2:
            file_name = sys.argv[1]

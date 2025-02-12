@@ -1,7 +1,9 @@
 import cv2
 from PyQt6.QtCore import Qt, QTimer
-from playback_mode import PlaybackMode
+from .playback_mode import PlaybackMode
 from PyQt6.QtGui import QPixmap, QImage, QIcon
+from utils.file_utils import is_valid_video_file, get_file_size
+from utils.logging_utils import log_info, log_warning, log_error
 from PyQt6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QVBoxLayout, QWidget, QMessageBox, QSizePolicy
 )
@@ -28,7 +30,7 @@ class VideoPlayer(QWidget):
         self.pixmap_item = QGraphicsPixmapItem()
         self.scene.addItem(self.pixmap_item)
 
-        self.view.setMinimumSize(1092, 888) # 1092, 888
+        self.view.setMinimumSize(1092, 888) 
         self.view.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.view.setStyleSheet("background-color: black;")
@@ -39,6 +41,14 @@ class VideoPlayer(QWidget):
 
     def load_video(self, path):
         """Loads the video file and initializes the UI elements."""
+        if not is_valid_video_file(path):
+            log_warning(f"Attempted to load invalid video file: {path}")
+            QMessageBox.warning(self, "Invalid File", "The selected file is not a valid video format.")
+            return
+
+        file_size = get_file_size(path)
+        log_info(f"Loading video: {path} (Size: {file_size})")
+
         if self.cap:
             self.cap.release()  
 
@@ -46,11 +56,14 @@ class VideoPlayer(QWidget):
         self.cap = cv2.VideoCapture(path)
 
         if not self.cap.isOpened():
+            log_error(f"Failed to open video file: {path}")
             QMessageBox.warning(self, "Error", f"Failed to open video file from {path}")
             return
 
         self.video_fps = int(self.cap.get(cv2.CAP_PROP_FPS)) 
         self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        log_info(f"Video Loaded: {path} | FPS: {self.video_fps} | Total Frames: {self.total_frames}")
 
         self.video_controls.max_frame_label.setText(str(self.total_frames))
         self.video_controls.frame_slider.setRange(0, self.total_frames)

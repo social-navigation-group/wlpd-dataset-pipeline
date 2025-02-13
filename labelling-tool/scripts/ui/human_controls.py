@@ -1,6 +1,6 @@
 import sys
 from PyQt6.QtCore import QFileInfo
-from PyQt6.QtWidgets import QWidget, QLabel, QLineEdit, QFrame, QVBoxLayout
+from PyQt6.QtWidgets import QWidget, QLabel, QLineEdit, QFrame, QVBoxLayout, QPushButton
 
 class HumanControls(QWidget):
     def __init__(self, video_player, parent: QWidget):
@@ -8,51 +8,41 @@ class HumanControls(QWidget):
         self.video_player = video_player
 
         # SET TESTING IN THE LAYOUT
-        self.setLayout(self.just_to_insert_something())
-    
-    # THIS IS JUST TO PUT SOMETHING IN THE TAB 
-    def just_to_insert_something(self):
-        if len(sys.argv) >= 2:
-           file_name = sys.argv[1]
-        else:
-           file_name = "."
+        self.setLayout(self.create_human_controls())
         
-        file_info = QFileInfo(file_name)
-
-        file_name_label = QLabel("File Name:")
-        file_name_edit = QLineEdit(file_info.fileName())
-
-        path_label = QLabel("Path:")
-        path_value_label = QLabel(file_info.absoluteFilePath())
-        path_value_label.setFrameStyle(QFrame.Shape.Panel | QFrame.Shadow.Sunken)
-
-        size_label = QLabel("Size:")
-        size = file_info.size() / 1024
-        size_value_label = QLabel(f"{size} K")
-        size_value_label.setFrameStyle(QFrame.Shape.Panel | QFrame.Shadow.Sunken)
-
-        last_read_label = QLabel("Last Read:")
-        last_read_value_label = QLabel(file_info.lastRead().toString())
-        last_read_value_label.setFrameStyle(QFrame.Shape.Panel | QFrame.Shadow.Sunken)
-
-        last_mod_label = QLabel("Last Modified:")
-        last_mod_value_label = QLabel(file_info.lastModified().toString())
-        last_mod_value_label.setFrameStyle(QFrame.Shape.Panel | QFrame.Shadow.Sunken)
-
-        main_layout = QVBoxLayout()
-        main_layout.addWidget(file_name_label)
-        main_layout.addWidget(file_name_edit)
-        main_layout.addWidget(path_label)
-        main_layout.addWidget(path_value_label)
-        main_layout.addWidget(size_label)
-        main_layout.addWidget(size_value_label)
-        main_layout.addWidget(last_read_label)
-        main_layout.addWidget(last_read_value_label)
-        main_layout.addWidget(last_mod_label)
-        main_layout.addWidget(last_mod_value_label)
-        main_layout.addStretch(1)
-
+        self.traj_starts, self.trajectories = self.load_trajectories_dummy()
+        self.numPerson = len(self.traj_starts)
+        self.labelling_now = 0
+        
+        self.humanLabel = ['Adults' for _ in range(self.numPerson)]
+        
+    def create_human_controls(self):
+        labeling_layout = QVBoxLayout()
+        
+        for label in ["Strollers", "Children", "Adults", "Elderly", "Wheelchairs", "Blind"]:
+            button = QPushButton(label)
+            button.clicked.connect(self.on_label_button_clicked)
+            labeling_layout.addWidget(button)
+            
         if self.video_player:
-            main_layout.addWidget(QLabel("Video Player Linked!"))
+                labeling_layout.addWidget(QLabel("Video Player Linked!"))
         
-        return main_layout
+        return labeling_layout
+            
+    def on_label_button_clicked(self):
+        clicked_button = self.sender()
+        
+        if clicked_button is not None:
+            clicked_label = clicked_button.text()
+            print(f'Human ID {self.labelling_now + 1}: {clicked_label}')
+            self.humanLabel[self.labelling_now] = clicked_label
+            self.labelling_now += 1
+    
+    def load_trajectories_dummy(self):
+        traj_starts = [i * 10 for i in range(10)]
+        trajectories = [[100 + i, 200 + i] for i in range(30)]
+        trajectories = [trajectories for _ in range(10)]
+        
+        return traj_starts, trajectories
+    
+    

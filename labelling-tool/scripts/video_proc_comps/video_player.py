@@ -26,7 +26,7 @@ class VideoPlayer(QWidget):
 
         # GRAPHICS SCENE
         self.scene = QGraphicsScene(self)
-        self.view = QGraphicsView(self.scene)
+        self.view = Clickable_QGraphicsView(self.scene)
         self.pixmap_item = QGraphicsPixmapItem()
         self.scene.addItem(self.pixmap_item)
 
@@ -156,3 +156,17 @@ class VideoPlayer(QWidget):
     def forward(self, speed=2):
         """Starts fast-forwarding at the given speed."""
         self.change_playback_mode(PlaybackMode.FORWARDING, speed=speed)
+
+class Clickable_QGraphicsView(QGraphicsView):
+    def mousePressEvent(self, event):
+        """Gets position of Mouse Click.
+        (0, 0) is at the top-left corner, 
+        and the bottom-right corner represents the maximum coordinate."""
+        view_pos = event.position()
+        
+        self.x_view = view_pos.x()
+        self.y_view = view_pos.y()
+        
+        print(f"x={self.x_view}, y={self.y_view}")
+        
+        super().mousePressEvent(event)

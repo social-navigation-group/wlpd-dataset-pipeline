@@ -5,6 +5,7 @@ from .video_controls import VideoControls
 from utils.file_utils import list_video_files
 from utils.logging_utils import log_info, log_warning
 from PyQt6.QtWidgets import QMainWindow, QVBoxLayout, QWidget, QSplitter
+import toml
 
 class MainWindow(QMainWindow):
     def __init__(self, resources_path: str):
@@ -39,6 +40,9 @@ class MainWindow(QMainWindow):
         # AUTOLOAD LAST USED VIDEO
         self.load_last_video(resources_path)
 
+        human_config_path = os.path.join(resources_path, "config", "human_config.toml")
+        self.load_human_config(human_config_path)
+
     def load_last_video(self, resources_path):
         """Loads the last available video in the directory."""
         videos_path = os.path.join(resources_path, "videos")
@@ -59,3 +63,11 @@ class MainWindow(QMainWindow):
                 log_info(f"Loaded stylesheet: {path}")
         except FileNotFoundError:
             log_warning(f"Stylesheet {path} not found.")
+
+    def load_human_config(self, path):
+        try:
+            with open(path, "r") as f:
+                self.human_config = toml.load(f)
+        
+        except FileNotFoundError:
+            log_warning(f"Human Config file {path} not found.")

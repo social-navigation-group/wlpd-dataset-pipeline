@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QPushButton, QTextEdit, QLabel
+    QWidget, QVBoxLayout, QPushButton, QTextEdit, QLabel, QLineEdit
 )
 
 class TrajectoryControls(QWidget):
@@ -31,4 +31,38 @@ class TrajectoryControls(QWidget):
         if self.video_player:
             labeling_layout.addWidget(QLabel("Video Player Linked!"))
 
+        for i in range(2):
+            labeling_layout.insertWidget(2 * i, QLabel(f"Trajectory {i + 1}"))
+            trajectory_input = QLineEdit()
+            trajectory_input.returnPressed.connect(self.on_enter_pressed)
+            labeling_layout.insertWidget(2 * i + 1, trajectory_input)
+
         return labeling_layout
+    
+    def create_trajID_input(self, labeling_layout, numLayout):
+        for i in range(numLayout):
+            labeling_layout.insertWidget(2 * i, QLabel(f"Trajectory {i + 1}"))
+            trajectory_input = QLineEdit()
+            trajectory_input.returnPressed.connect(self.on_enter_pressed)
+            labeling_layout.insertWidget(2 * i + 1, trajectory_input)
+
+        return labeling_layout
+    
+    def delete_trajID_input(self, labeling_layout, numLayout):
+        for i in range(numLayout):
+            for j in range(2):
+                index_to_remove = 2 * i + j
+                item = labeling_layout.itemAt(index_to_remove)
+                
+                if item is not None:
+                    widget = item.widget()
+                    labeling_layout.removeWidget(widget)
+                    widget.deleteLater()
+
+        return labeling_layout
+    
+    def on_enter_pressed(self):
+        line_edit_now = self.sender()
+        traj_ID = int(line_edit_now.text())
+
+        print("traj_ID:", traj_ID)

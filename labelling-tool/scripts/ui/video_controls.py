@@ -2,8 +2,8 @@ import os
 import cv2
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon
-from utils.logging_utils import log_info
 from utils.file_utils import list_video_files
+from utils.logging_utils import log_info, log_warning
 from video_proc_comps.video_player import VideoPlayer
 from video_proc_comps.playback_mode import PlaybackMode
 from PyQt6.QtWidgets import (
@@ -14,26 +14,29 @@ class VideoControls(QWidget):
     def __init__(self, resources_path: str):
         super().__init__()
 
-       # VIDEO PLAYER WIDGET
+        self.resources_path = resources_path 
         self.video_player = VideoPlayer(self)
 
         # VIDEO FILE DROPDOWN
         self.video_dropdown = QComboBox()
-        self.populate_video_list(resources_path)
+        self.populate_video_list()
+        # self.video_dropdown.currentIndexChanged.connect(self.load_video) 
 
         # SET THE CONTROLS IN THE LAYOUT
-        self.setLayout(self.create_video_controls(resources_path))
+        self.setLayout(self.create_video_controls())
 
-    def populate_video_list(self, resources_path):
+    def populate_video_list(self):
         """Scans the default directory and populates the dropdown with available videos."""
-        videos_path = os.path.join(resources_path, "videos")
+        videos_path = os.path.join(self.resources_path, "videos")
         video_files = list_video_files(videos_path)
+        self.video_dropdown.clear()
 
         if not video_files:
             log_info("No video files found in the directory.")
             self.video_dropdown.addItem("No videos found")
         else:
             log_info(f"Found {len(video_files)} video files in {videos_path}")
+            self.video_dropdown.addItem("Select a video")
             self.video_dropdown.addItems(video_files)
 
     def create_button(self, icon_path, callback, size=(50, 22)):
@@ -44,7 +47,7 @@ class VideoControls(QWidget):
         button.clicked.connect(callback)
         return button
 
-    def create_video_controls(self, resources_path):
+    def create_video_controls(self):
         """Creates and returns the video control UI."""
 
         # PLAYBACK BUTTONS
@@ -52,7 +55,7 @@ class VideoControls(QWidget):
         self.play_pause_button = self.create_button("../resources/icons/play/play-60.png", self.toggle_to_play)
         self.stop_button = self.create_button("../resources/icons/stop/stop-60.png", self.toggle_to_stop)
         self.forward_button = self.create_button("../resources/icons/fast-forward/forward-60.png", self.toggle_to_forward)
-        self.upload_button = self.create_button("../resources/icons/upload/upload-60.png", lambda: self.load_video(resources_path))
+        self.upload_button = self.create_button("../resources/icons/upload/upload-60.png", self.load_video)
 
         playback_controls = QHBoxLayout()
         for btn in [self.rewind_button, self.play_pause_button, self.stop_button, self.forward_button, self.video_dropdown, self.upload_button]:
@@ -84,14 +87,25 @@ class VideoControls(QWidget):
 
         return video_layout
     
-    def load_video(self, resources_path):
-        """Loads the selected video from the dropdown."""
+    def load_video(self):
+        """Loads the selected video from the dropdown.""" 
+        index = self.video_dropdown.currentIndex()
         selected_video = self.video_dropdown.currentText()
-        if selected_video and selected_video != "No videos found":
-            video_path = os.path.join(resources_path, "videos", selected_video)
-            log_info(f"User selected video file: {video_path}")
-            self.video_player.load_video(video_path)
-            self.frame_slider.setRange(0, int(self.video_player.cap.get(cv2.CAP_PROP_FRAME_COUNT)))
+
+        if index == 0 or selected_video == "No videos found":
+            log_warning("No valid video selected.")
+            return  
+
+        video_path = os.path.join(self.resources_path, "videos", selected_video)
+        log_info(f"User selected video file: {video_path}")
+        self.video_player.load_video(video_path)
+
+        total_frames = int(self.video_player.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if total_frames > 0:
+            self.frame_slider.setRange(0, total_frames)
+            self.max_frame_label.setText(str(total_frames))
+        else:
+            log_warning(f"Invalid frame count for {video_path}")
     
     def toggle_to_play(self):
         """Toggles between play and pause, ensuring a single click pauses all playback modes."""

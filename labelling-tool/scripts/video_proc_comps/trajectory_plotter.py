@@ -3,10 +3,9 @@ import numpy as np
 
 class TrajectoryPlotter:
     @staticmethod
-    def plot_trajectories(video_path, save_path, traj_file):
-        data = np.load(traj_file, allow_pickle=True)
-        trajectories = data['trajectories']
-        traj_starts = data['traj_starts']
+    def plot_trajectories(video_path, save_path, human_config):
+        trajectories = [human_config[a]['trajectories'] for a in human_config]
+        traj_starts = [human_config[a]['traj_start'] for a in human_config]
 
         cap = cv2.VideoCapture(video_path)
         frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))

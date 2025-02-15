@@ -2,10 +2,12 @@ import cv2
 from PyQt6.QtCore import Qt, QTimer
 from .playback_mode import PlaybackMode
 from PyQt6.QtGui import QPixmap, QImage, QIcon
+from .trajectory_manager import TrajectoryManager
+from .trajectory_click_handler import TrajectoryClickHandler
 from utils.file_utils import is_valid_video_file, get_file_size
 from utils.logging_utils import log_info, log_warning, log_error
 from PyQt6.QtWidgets import (
-    QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QVBoxLayout, QWidget, QMessageBox, QSizePolicy
+    QGraphicsScene, QGraphicsPixmapItem, QVBoxLayout, QWidget, QMessageBox, QSizePolicy, QApplication
 )
 
 class VideoPlayer(QWidget):
@@ -13,20 +15,24 @@ class VideoPlayer(QWidget):
         super().__init__()
         self.cap = None
         self.video_fps = 30  
+        self.frame_cache = {}
         self.total_frames = 0  
         self.video_path = None
         self.video_controls = video_controls
         self.playback_mode = PlaybackMode.STOPPED
 
+        self.trajectory_manager = TrajectoryManager()
+
         # TIMERS
         self.timer = QTimer()
+        self.playback_speed = 1  
         self.timer.timeout.connect(self.update_frame)
-
-        self.playback_speed = 1  # Default speed (1x for normal, -1 for rewind, 2x for fast-forward)
 
         # GRAPHICS SCENE
         self.scene = QGraphicsScene(self)
-        self.view = QGraphicsView(self.scene)
+        self.view = TrajectoryClickHandler(self.trajectory_manager)
+        self.view.setScene(self.scene) 
+
         self.pixmap_item = QGraphicsPixmapItem()
         self.scene.addItem(self.pixmap_item)
 
@@ -64,6 +70,7 @@ class VideoPlayer(QWidget):
         self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
         log_info(f"Video Loaded: {path} | FPS: {self.video_fps} | Total Frames: {self.total_frames}")
+        self.frame_cache.clear()
 
         self.video_controls.max_frame_label.setText(str(self.total_frames))
         self.video_controls.frame_slider.setRange(0, self.total_frames)
@@ -83,7 +90,7 @@ class VideoPlayer(QWidget):
         elif self.playback_mode == PlaybackMode.REWINDING:
             new_frame = max(0, current_frame - self.playback_speed)
         elif self.playback_mode == PlaybackMode.FORWARDING:
-            new_frame = min(self.total_frames - 1, current_frame + self.playback_speed)
+            new_frame = min(self.total_frames - 1, current_frame + (self.playback_speed * 2))
         else:
             self.timer.stop()
             return
@@ -97,26 +104,57 @@ class VideoPlayer(QWidget):
             self.video_controls.play_pause_button.setIcon(QIcon("../resources/icons/play/play-60.png"))
 
     def show_frame_at(self, frame_number):
-        """Displays the frame at a given position."""
-        if self.cap and self.cap.isOpened():
-            self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
-            ret, frame = self.cap.read()
-            if ret:
-                self.display_frame(frame)
-                self.video_controls.current_frame_label.setText(str(frame_number))
-                self.video_controls.frame_slider.setValue(frame_number)
+        """Displays the frame at a given position using caching"""
+        self.video_controls.current_frame_label.setText(str(frame_number))
+        self.video_controls.frame_slider.setValue(frame_number)
+
+        if frame_number in self.frame_cache and self.frame_cache[frame_number] is not None:
+            frame = self.frame_cache[frame_number]
+        else:
+            if self.cap and self.cap.isOpened():
+                self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number) 
+                ret, frame = self.cap.read()
+
+                if ret and frame is not None:
+                    self.frame_cache[frame_number] = frame  
+                else:
+                    log_warning(f"Failed to read frame {frame_number}")
+                    return
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+
+        if frame is not None:
+            self.display_frame(frame)
+        else:
+            log_warning(f"Frame {frame_number} is None. Video might be corrupted or out of range.")
 
     def display_frame(self, frame):
         """Converts the OpenCV frame to a QPixmap and displays it."""
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        height, width, channel = frame.shape
-        bytes_per_line = 3 * width
-        image = QImage(frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888)
-        pixmap = QPixmap.fromImage(image)
+        if frame is None:
+            log_warning("display_frame() received None frame. Skipping frame update.")
+            return 
 
-        self.pixmap_item.setPixmap(pixmap)
-        self.scene.setSceneRect(0, 0, pixmap.width(), pixmap.height())
-        self.view.fitInView(self.pixmap_item, Qt.AspectRatioMode.KeepAspectRatio)
+        try:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            height, width, channel = frame.shape
+            bytes_per_line = 3 * width
+
+            image = QImage(frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888)
+            pixmap = QPixmap.fromImage(image)
+
+            if pixmap.isNull():
+                log_warning("Converted QPixmap is null. Frame might be corrupted.")
+                return
+
+            if self.pixmap_item.pixmap().isNull() or self.pixmap_item.pixmap() != pixmap:
+                self.pixmap_item.setPixmap(pixmap)
+                self.scene.setSceneRect(0, 0, pixmap.width(), pixmap.height())
+                self.view.fitInView(self.pixmap_item, Qt.AspectRatioMode.KeepAspectRatio)
+
+                self.view.update()
+                self.view.repaint()
+                QApplication.processEvents()
+        except Exception as e:
+            log_error(f"Error in display_frame: {e}")
 
     def change_playback_mode(self, mode, speed=1):
         """Sets playback mode and adjusts timer settings."""
@@ -140,19 +178,19 @@ class VideoPlayer(QWidget):
             if self.cap.isOpened():
                 self.show_frame_at(0)
 
-    def play(self):
+    def play(self, speed = 2):
         """Starts video playback."""
-        self.change_playback_mode(PlaybackMode.PLAYING, speed=1)
+        self.change_playback_mode(PlaybackMode.PLAYING, speed=speed)
 
     def pause(self):
         """Pauses playback."""
         self.timer.stop()
         self.playback_mode = PlaybackMode.STOPPED
 
-    def rewind(self, speed=2):
+    def rewind(self, speed = 2):
         """Starts rewinding at the given speed."""
         self.change_playback_mode(PlaybackMode.REWINDING, speed=speed)
 
-    def forward(self, speed=2):
+    def forward(self, speed = 4):
         """Starts fast-forwarding at the given speed."""
         self.change_playback_mode(PlaybackMode.FORWARDING, speed=speed)

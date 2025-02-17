@@ -11,11 +11,11 @@ from PyQt6.QtWidgets import (
 )
 
 class VideoControls(QWidget):
-    def __init__(self, resources_path: str):
+    def __init__(self, resource_manager: str):
         super().__init__()
-
-        self.resources_path = resources_path 
-        self.video_player = VideoPlayer(self)
+        self.resource_manager = resource_manager
+        self.resources_path = self.resource_manager.resources_path
+        self.video_player = VideoPlayer(self, self.resource_manager)
 
         # VIDEO FILE DROPDOWN
         self.video_dropdown = QComboBox()
@@ -51,11 +51,11 @@ class VideoControls(QWidget):
         """Creates and returns the video control UI."""
 
         # PLAYBACK BUTTONS
-        self.rewind_button = self.create_button("../resources/icons/rewind/rewind-60.png", self.toggle_to_rewind)
-        self.play_pause_button = self.create_button("../resources/icons/play/play-60.png", self.toggle_to_play)
-        self.stop_button = self.create_button("../resources/icons/stop/stop-60.png", self.toggle_to_stop)
-        self.forward_button = self.create_button("../resources/icons/fast-forward/forward-60.png", self.toggle_to_forward)
-        self.upload_button = self.create_button("../resources/icons/upload/upload-60.png", self.load_video)
+        self.rewind_button = self.create_button(self.resource_manager.get_icon("rewind", "rewind-60"), self.toggle_to_rewind)
+        self.play_pause_button = self.create_button(self.resource_manager.get_icon("play", "play-60"), self.toggle_to_play)
+        self.stop_button = self.create_button(self.resource_manager.get_icon("stop", "stop-60"), self.toggle_to_stop)
+        self.forward_button = self.create_button(self.resource_manager.get_icon("fast-forward", "forward-60"), self.toggle_to_forward)
+        self.upload_button = self.create_button(self.resource_manager.get_icon("upload", "upload-60"), self.load_video)
 
         playback_controls = QHBoxLayout()
         for btn in [self.rewind_button, self.play_pause_button, self.stop_button, self.forward_button, self.video_dropdown, self.upload_button]:
@@ -96,7 +96,7 @@ class VideoControls(QWidget):
             log_warning("No valid video selected.")
             return  
 
-        video_path = os.path.join(self.resources_path, "videos", selected_video)
+        video_path = self.resource_manager.get_video(selected_video)
         log_info(f"User selected video file: {video_path}")
         self.video_player.load_video(video_path)
 
@@ -112,34 +112,34 @@ class VideoControls(QWidget):
         if self.video_player.playback_mode in [PlaybackMode.PLAYING, PlaybackMode.REWINDING, PlaybackMode.FORWARDING]:
             log_info("Video playback paused")
             self.video_player.pause()
-            self.play_pause_button.setIcon(QIcon("../resources/icons/play/play-60.png"))
+            self.play_pause_button.setIcon(QIcon(self.resource_manager.get_icon("play", "play-60")))
         else:
             log_info("Video playback started")
             self.video_player.play()
-            self.play_pause_button.setIcon(QIcon("../resources/icons/pause/pause-60.png"))
+            self.play_pause_button.setIcon(QIcon(self.resource_manager.get_icon("pause", "pause-60")))
 
     def toggle_to_rewind(self):
         """Toggles between rewind and stop."""
         if self.video_player.playback_mode == PlaybackMode.REWINDING:
             self.video_player.pause()
-            self.play_pause_button.setIcon(QIcon("../resources/icons/play/play-60.png"))
+            self.play_pause_button.setIcon(QIcon(self.resource_manager.get_icon("play", "play-60")))
         else:
             self.video_player.rewind()
-            self.play_pause_button.setIcon(QIcon("../resources/icons/pause/pause-60.png"))
+            self.play_pause_button.setIcon(QIcon(self.resource_manager.get_icon("pause", "pause-60")))
 
     def toggle_to_forward(self):
         """Toggles between fast forward and stop."""
         if self.video_player.playback_mode == PlaybackMode.FORWARDING:
             self.video_player.pause()
-            self.play_pause_button.setIcon(QIcon("../resources/icons/play/play-60.png"))
+            self.play_pause_button.setIcon(QIcon(self.resource_manager.get_icon("play", "play-60")))
         else:
             self.video_player.forward()
-            self.play_pause_button.setIcon(QIcon("../resources/icons/pause/pause-60.png"))
+            self.play_pause_button.setIcon(QIcon(self.resource_manager.get_icon("pause", "pause-60")))
 
     def toggle_to_stop(self):
         """Stops playback and resets to the first frame."""
         self.video_player.stop()
-        self.play_pause_button.setIcon(QIcon("../resources/icons/play/play-60.png"))
+        self.play_pause_button.setIcon(QIcon(self.resource_manager.get_icon("play", "play-60")))
         self.frame_slider.setValue(0)
 
     def slider_moved(self, position):

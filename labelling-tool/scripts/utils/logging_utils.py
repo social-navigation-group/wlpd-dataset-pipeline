@@ -20,7 +20,6 @@ def setup_logger(name: str, log_file: str, level=logging.INFO):
 
     return logger
 
-# Logger instance
 app_logger = setup_logger("AppLogger", "logs/application.log")
 
 def log_info(message: str):

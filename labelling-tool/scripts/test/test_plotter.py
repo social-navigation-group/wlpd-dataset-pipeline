@@ -1,6 +1,6 @@
 import os
 from utils.logging_utils import log_info
-from video_proc_comps.trajectory_plotter import TrajectoryPlotter
+from .trajectory_plotter import TrajectoryPlotter
 
 resources_path = os.path.join(os.path.dirname(__file__), "..", "resources")
 video_path = os.path.join(resources_path, "videos", "example_raw.avi") 

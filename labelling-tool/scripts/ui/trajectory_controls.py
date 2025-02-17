@@ -27,9 +27,6 @@ class TrajectoryControls(QWidget):
         labeling_layout.addWidget(self.log_labeling)
         labeling_layout.addWidget(self.log_submit_button)
 
-        if self.video_player:
-            labeling_layout.addWidget(QLabel("Video Player Linked!"))
-
         for i in range(2):
             labeling_layout.insertWidget(2 * i, QLabel(f"Trajectory {i + 1}"))
             trajectory_input = QLineEdit()

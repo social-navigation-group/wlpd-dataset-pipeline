@@ -1,6 +1,4 @@
-import sys
-from PyQt6.QtCore import QFileInfo
-from PyQt6.QtWidgets import QWidget, QLabel, QLineEdit, QFrame, QVBoxLayout, QPushButton
+from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QPushButton
 
 class HumanControls(QWidget):
     def __init__(self, video_player, parent: QWidget):
@@ -23,9 +21,6 @@ class HumanControls(QWidget):
             button = QPushButton(label)
             button.clicked.connect(self.on_label_button_clicked)
             labeling_layout.addWidget(button)
-            
-        if self.video_player:
-                labeling_layout.addWidget(QLabel("Video Player Linked!"))
         
         return labeling_layout
             
@@ -44,5 +39,3 @@ class HumanControls(QWidget):
         trajectories = [trajectories for _ in range(10)]
         
         return traj_starts, trajectories
-    
-    

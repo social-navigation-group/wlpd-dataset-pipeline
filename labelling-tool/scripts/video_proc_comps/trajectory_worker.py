@@ -1,98 +1,8 @@
-'''import cv2
-import time
-import numpy as np
-from utils.logging_utils import log_info
-from PyQt6.QtCore import QThread, pyqtSignal
-
-class TrajectoryWorker(QThread):
-    update_overlay = pyqtSignal(np.ndarray)
-
-    def __init__(self, trajectories, traj_starts, colors, video_width, video_height, video_fps=30):
-        super().__init__()
-        self.running = True
-        self.colors = colors
-        self.frame_number = -1
-        self.overlay_cache = {} 
-        self.video_fps = video_fps
-        self.traj_starts = traj_starts
-        self.video_width = video_width
-        self.video_height = video_height
-        self.trajectories = trajectories
-        self.full_trajectory_overlay = np.zeros((self.video_height, self.video_width, 3), dtype = np.uint8)  
-
-    def run(self):
-        """Runs the thread and updates overlay when frame changes."""
-        last_frame = -1  
-
-        while self.running:
-            if self.frame_number < 0 or self.frame_number == last_frame:
-                time.sleep(1 / self.video_fps)  
-                continue
-            last_frame = self.frame_number  
-            
-            if self.frame_number in self.overlay_cache:
-                overlay = self.overlay_cache[self.frame_number]
-                log_info(f"[DEBUG] Using cached overlay for frame {self.frame_number}")
-            else:
-                overlay = self.full_trajectory_overlay.copy()
-
-                for i, traj in enumerate(self.trajectories):
-                    traj_start = self.traj_starts[i]
-                    frame_offset = self.frame_number - traj_start
-
-                    if frame_offset < 0:
-                        continue  
-
-                    if frame_offset >= len(traj):
-                        continue  
-
-                    # Persist full trajectory up to current frame
-                    past_points = traj[:frame_offset + 1]  
-
-                    if len(past_points) > 1:
-                        for j in range(len(past_points) - 1):
-                            pt1 = self.scale_point(past_points[j])
-                            pt2 = self.scale_point(past_points[j + 1])
-                            cv2.line(overlay, pt1, pt2, self.colors[i % len(self.colors)].tolist(), 2)
-
-                self.overlay_cache[self.frame_number] = overlay
-                self.full_trajectory_overlay = overlay.copy() 
-                log_info(f"[DEBUG] Cached full overlay for frame {self.frame_number}")
-
-            self.update_overlay.emit(overlay)
-
-    def scale_point(self, point):
-        """Ensure trajectory points are scaled correctly to match video resolution."""
-        x, y = point
-        scaled_x = int(x * self.video_width) if x <= 1 else int(round(x))
-        scaled_y = int(y * self.video_height) if y <= 1 else int(round(y))
-        
-        # Ensure points stay within frame bounds
-        scaled_x = max(0, min(self.video_width - 1, scaled_x))
-        scaled_y = max(0, min(self.video_height - 1, scaled_y))
-
-        return (scaled_x, scaled_y)
-
-    def update_frame(self, frame_number):
-        """Ensures the thread starts only if necessary."""
-        if self.frame_number != frame_number:
-            log_info(f"[DEBUG] Updating frame to {frame_number}")
-            self.frame_number = frame_number
-            if not self.isRunning(): 
-                self.start()
-
-    def stop(self):
-        """Gracefully stops the thread."""
-        if self.isRunning():  
-            self.running = False
-            self.wait()  
-            self.quit()'''
-
 import cv2
-import numpy as np
 import time
-from utils.logging_utils import log_info
+import numpy as np
 from PyQt6.QtCore import QThread, pyqtSignal
+from utils.logging_utils import log_info, log_error
 
 class TrajectoryWorker(QThread):
     update_overlay = pyqtSignal(np.ndarray)
@@ -102,14 +12,14 @@ class TrajectoryWorker(QThread):
         self.running = True
         self.colors = colors
         self.frame_number = -1
+        self.overlay_cache = {} 
+        self.video_fps = video_fps
+        self.cache_size = cache_size  # Buffer only 30 frames (~1 sec)
         self.traj_starts = traj_starts
         self.video_width = video_width
         self.video_height = video_height
         self.trajectories = trajectories
         self.total_frames = total_frames
-        self.video_fps = video_fps
-        self.overlay_cache = {}  # **Rolling Buffer**
-        self.cache_size = cache_size  # Buffer only 30 frames (~1 sec)
 
     def run(self):
         """Runs the thread and updates overlay when frame changes."""
@@ -131,8 +41,8 @@ class TrajectoryWorker(QThread):
             self._preload_future_frames(self.frame_number)
 
     def _generate_overlay(self, frame_idx):
-        """Generates trajectory overlay for a single frame."""
-        overlay = np.zeros((self.video_height, self.video_width, 3), dtype=np.uint8)
+        """Generates trajectory overlay and labels for a frame."""
+        overlay = np.zeros((self.video_height, self.video_width, 3), dtype = np.uint8)
 
         for i, traj in enumerate(self.trajectories):
             traj_start = self.traj_starts[i]
@@ -140,13 +50,19 @@ class TrajectoryWorker(QThread):
 
             if frame_offset < 0 or frame_offset >= len(traj):
                 continue  
-            past_points = traj[:frame_offset + 1]  
 
-            if len(past_points) > 1:
-                for j in range(len(past_points) - 1):
-                    pt1 = self.scale_point(past_points[j])
-                    pt2 = self.scale_point(past_points[j + 1])
-                    cv2.line(overlay, pt1, pt2, self.colors[i % len(self.colors)].tolist(), 2)
+            try:
+                past_points = traj[:frame_offset + 1]  
+                if len(past_points) > 1:
+                    for j in range(len(past_points) - 1):
+                        pt1 = self.scale_point(past_points[j])
+                        pt2 = self.scale_point(past_points[j + 1])
+                        cv2.line(overlay, pt1, pt2, self.colors[i % len(self.colors)].tolist(), 2)
+                        
+                        last_point = self.scale_point(past_points[-1])
+                        cv2.putText(overlay, str(i + 1), last_point, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 146, 35), 1, lineType=cv2.LINE_AA)
+            except Exception as e:
+                log_error(f"Error processing trajectory {i} at frame {frame_idx}: {e}")
 
         return overlay
 
@@ -164,16 +80,14 @@ class TrajectoryWorker(QThread):
                 del self.overlay_cache[key]
 
     def scale_point(self, point):
-        """Ensure trajectory points are scaled correctly to match video resolution."""
-        x, y = point
-        scaled_x = int(x * self.video_width) if x <= 1 else int(round(x))
-        scaled_y = int(y * self.video_height) if y <= 1 else int(round(y))
-
-        # Ensure points stay within frame bounds
-        scaled_x = max(0, min(self.video_width - 1, scaled_x))
-        scaled_y = max(0, min(self.video_height - 1, scaled_y))
-
-        return (scaled_x, scaled_y)
+        try:
+            x, y = point
+            scaled_x = int(x * self.video_width) if x <= 1 else int(round(x))
+            scaled_y = int(y * self.video_height) if y <= 1 else int(round(y))
+            return max(0, min(self.video_width - 1, scaled_x)), max(0, min(self.video_height - 1, scaled_y))
+        except Exception as e:
+            log_error(f"Error scaling point {point}: {e}")
+            return (0, 0)
 
     def update_frame(self, frame_number):
         """Ensures the thread starts only if necessary."""
@@ -189,3 +103,4 @@ class TrajectoryWorker(QThread):
             self.running = False
             self.wait()  
             self.quit()
+        log_info("TrajectoryWorker stopped.")

@@ -1,5 +1,4 @@
 import cv2
-import toml
 import time
 import numpy as np
 from PyQt6.QtCore import Qt, QTimer
@@ -7,6 +6,7 @@ from .playback_mode import PlaybackMode
 from PyQt6.QtGui import QPixmap, QImage, QIcon
 from .trajectory_worker import TrajectoryWorker
 from .trajectory_manager import TrajectoryManager
+from utils.human_config_utils import HumanConfigUtils
 from .trajectory_click_handler import TrajectoryClickHandler
 from utils.file_utils import is_valid_video_file, get_file_size
 from utils.logging_utils import log_info, log_warning, log_error
@@ -31,10 +31,10 @@ class VideoPlayer(QWidget):
         self.trajectory_manager = TrajectoryManager()
 
         self.human_config_path = self.resource_manager.get_human_config()
-        self.load_human_config(self.human_config_path)
+        self.human_config = HumanConfigUtils(self.human_config_path)
 
-        self.trajectories = np.array([self.human_config[a]['trajectories'] for a in self.human_config], dtype = object)
-        self.traj_starts = np.array([self.human_config[a]['traj_start'] for a in self.human_config])
+        self.trajectories = np.array([self.human_config.get_element(a, 'trajectories') for a in self.human_config.dict.keys()], dtype = object)
+        self.traj_starts = np.array([self.human_config.get_element(a, 'traj_start') for a in self.human_config.dict.keys()])
 
         self.colors = np.array([
             [255, 255, 255], [0, 255, 255], [255, 0, 255],
@@ -49,7 +49,7 @@ class VideoPlayer(QWidget):
 
         # GRAPHICS SCENE
         self.scene = QGraphicsScene(self)
-        self.view = TrajectoryClickHandler(self.trajectory_manager)
+        self.view = TrajectoryClickHandler(self.trajectory_manager, self.trajectories, self.scene)
         self.view.setScene(self.scene) 
 
         self.pixmap_item = QGraphicsPixmapItem()
@@ -63,50 +63,6 @@ class VideoPlayer(QWidget):
         layout = QVBoxLayout()
         layout.addWidget(self.view)
         self.setLayout(layout)
-
-    '''def load_video(self, path):
-        """Loads the video file and initializes the UI elements."""
-        if not is_valid_video_file(path):
-            log_warning(f"Attempted to load invalid video file: {path}")
-            QMessageBox.warning(self, "Invalid File", "The selected file is not a valid video format.")
-            return
-
-        file_size = get_file_size(path)
-        log_info(f"Loading video: {path} (Size: {file_size})")
-
-        if self.cap:
-            self.cap.release()  
-
-        self.video_path = path
-        self.cap = cv2.VideoCapture(path)
-
-        if not self.cap.isOpened():
-            log_error(f"Failed to open video file: {path}")
-            QMessageBox.warning(self, "Error", f"Failed to open video file from {path}")
-            return
-
-        self.video_fps = int(self.cap.get(cv2.CAP_PROP_FPS)) 
-        self.video_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.video_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-        log_info(f"Video Loaded: {path} | FPS: {self.video_fps} | Total Frames: {self.total_frames}")
-        self.frame_cache.clear()
-
-        self.video_controls.max_frame_label.setText(str(self.total_frames))
-        self.video_controls.frame_slider.setRange(0, self.total_frames)
-
-        if hasattr(self, "trajectory_worker"):
-            self.trajectory_worker.stop()
-            self.trajectory_worker.wait()
-
-        # Start trajectory worker thread
-        self.trajectory_worker = TrajectoryWorker(self.trajectories, self.traj_starts, self.colors, self.video_width, self.video_height, self.video_fps)
-        self.trajectory_worker.update_overlay.connect(self.update_trajectory_overlay)
-        self.trajectory_worker.start()
-
-        self.trajectory_overlay = np.zeros((self.video_height, self.video_width, 3), dtype = np.uint8)
-        self.show_frame_at(0)'''
     
     def load_video(self, path):
         """Loads the video file and initializes the UI elements."""
@@ -131,8 +87,8 @@ class VideoPlayer(QWidget):
 
         self.video_fps = int(self.cap.get(cv2.CAP_PROP_FPS)) 
         self.video_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self.video_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.video_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         log_info(f"Video Loaded: {path} | FPS: {self.video_fps} | Resolution: {self.video_width}x{self.video_height} | Total Frames: {self.total_frames}")
         self.frame_cache.clear()
@@ -212,52 +168,18 @@ class VideoPlayer(QWidget):
             log_warning(f"Frame {frame_number} is None. Video might be corrupted or out of range.")
 
     def update_trajectory_overlay(self, overlay):
-        print("[DEBUG] Overlay updated")
+        log_info("[DEBUG] Overlay updated")
         self.trajectory_overlay = overlay
         self.update()
-
-    '''def display_frame(self, frame):
+    
+    def display_frame(self, frame):
         """Converts the OpenCV frame to a QPixmap and displays it."""
         if frame is None:
             log_warning("display_frame() received None frame. Skipping frame update.")
             return 
 
         try:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            if np.any(self.trajectory_overlay > 0):
-                log_info("[DEBUG] Applying trajectory overlay")
-
-            overlayed_frame = cv2.addWeighted(frame, 1, self.trajectory_overlay, 0.5, 0)
-            height, width, channel = overlayed_frame.shape
-            bytes_per_line = 3 * width
-
-            image = QImage(overlayed_frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888)
-            pixmap = QPixmap.fromImage(image)
-
-            if pixmap.isNull():
-                log_warning("Converted QPixmap is null. Frame might be corrupted.")
-                return
-
-            if self.pixmap_item.pixmap().isNull() or self.pixmap_item.pixmap() != pixmap:
-                self.pixmap_item.setPixmap(pixmap)
-                self.scene.setSceneRect(0, 0, pixmap.width(), pixmap.height())
-                self.view.fitInView(self.pixmap_item, Qt.AspectRatioMode.KeepAspectRatio)
-
-                self.view.update()
-                self.view.repaint()
-                QApplication.processEvents()
-        except Exception as e:
-            log_error(f"Error in display_frame: {e}")'''
-    
-    def display_frame(self, frame):
-        """Converts the OpenCV frame to a QPixmap and displays it efficiently."""
-        if frame is None:
-            log_warning("display_frame() received None frame. Skipping frame update.")
-            return 
-
-        try:
             start_time = time.time()
-
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             overlayed_frame = cv2.addWeighted(frame, 1, self.trajectory_overlay, 0.5, 0)
 
@@ -279,10 +201,9 @@ class VideoPlayer(QWidget):
             self.view.repaint()
             QApplication.processEvents()
 
-            end_time = time.time()  # Stop timing
-            render_time = (end_time - start_time) * 1000  # Convert to ms
+            end_time = time.time()
+            render_time = (end_time - start_time) * 1000  
             log_info(f"[PERF] Frame rendered in {render_time:.2f} ms")
-
         except Exception as e:
             log_error(f"Error in display_frame: {e}")
 
@@ -307,6 +228,12 @@ class VideoPlayer(QWidget):
             self.cap = cv2.VideoCapture(self.video_path)
             if self.cap.isOpened():
                 self.show_frame_at(0)
+    
+        if hasattr(self, "trajectory_worker"):
+            self.trajectory_worker.overlay_cache.clear()
+        
+        self.trajectory_overlay = np.zeros((self.video_height, self.video_width, 3), dtype = np.uint8)
+        self.display_frame(self.frame_cache.get(0))  
 
     def play(self, speed = 2):
         """Starts video playback."""
@@ -324,11 +251,3 @@ class VideoPlayer(QWidget):
     def forward(self, speed = 4):
         """Starts fast-forwarding at the given speed."""
         self.change_playback_mode(PlaybackMode.FORWARDING, speed=speed)
-
-    def load_human_config(self, path):
-        try:
-            with open(path, "r") as f:
-                self.human_config = toml.load(f)
-                log_info(f"Loaded Human Config file: {path}")
-        except FileNotFoundError:
-            log_warning(f"Human Config file {path} not found.")

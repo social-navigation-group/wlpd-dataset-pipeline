@@ -1,7 +1,7 @@
 import toml
-from .logging_utils import log_warning
+from .logging_utils import log_info, log_warning
 
-class HumanConfig():
+class HumanConfigUtils():
     def __init__(self, path):
         self.dict = self.load_human_config(path)
         self.used_indices = [int(key.replace("human", "")) for key in self.dict.keys()]
@@ -9,26 +9,26 @@ class HumanConfig():
     def load_human_config(self, path):
         try:
             with open(path, "r") as f:
-                human_config = toml.load(f)
-                return human_config
-
+                return toml.load(f)
         except FileNotFoundError:
-            log_warning(f"Human Config file {path} not found.")
+            log_warning(f"Human Config file {path} not found. Using an empty dict")
+            return {}
     
     def save_human_config(self, path):
         with open(path, 'w') as f:
             toml.dump(self.dict, f)
-            print(f"Config file was saved to {path}.")
+            log_info(f"Config file was saved to {path}.")
             
     def __len__(self):
         return len(self.dict)
     
     def get_newID(self):
+        used_set = set(self.used_indices)
         new_ID = 0
-        while True:
-            if new_ID not in self.used_indices:
-                return new_ID
+        
+        while new_ID in used_set:
             new_ID += 1
+        return new_ID
 
     def newID_init(self):
         newHuman_ID = self.get_newID()
@@ -43,11 +43,22 @@ class HumanConfig():
         return newHuman_ID
     
     def delete_ID(self, humanID):
-        self.used_indices.remove(humanID)
-        self.dict.pop(f"human{humanID}")
+        if f"human{humanID}" in self.dict:
+            self.dict.pop(f"human{humanID}", None)
+        else:
+            log_warning(f"Tried to delete non-existent humanID: {humanID}")
+        
+        if humanID in self.used_indices:
+            self.used_indices.remove(humanID)
 
     def get_element(self, humanID, elementName):
-        return self.dict[f"human{humanID}"][elementName]
+        # return self.dict[f"human{humanID}"][elementName]'''
+        if humanID in self.dict:
+            return self.dict[humanID].get(elementName, None) 
+        return None
 
     def set_element(self, humanID, elementName, value):
+        if f"human{humanID}" not in self.dict:
+            log_warning(f"Creating new entry for missing humanID: {humanID}")
+            self.dict[f"humanID{humanID}"] = {}
         self.dict[f"human{humanID}"][elementName] = value

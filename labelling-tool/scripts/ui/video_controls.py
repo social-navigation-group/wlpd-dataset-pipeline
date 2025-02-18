@@ -1,5 +1,6 @@
 import os
 import cv2
+import numpy as np
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon
 from utils.file_utils import list_video_files
@@ -139,6 +140,8 @@ class VideoControls(QWidget):
     def toggle_to_stop(self):
         """Stops playback and resets to the first frame."""
         self.video_player.stop()
+        self.video_player.trajectory_worker.overlay_cache.clear()
+        self.video_player.trajectory_overlay = np.zeros((self.video_player.video_height, self.video_player.video_width, 3), dtype=np.uint8)
         self.play_pause_button.setIcon(QIcon(self.resource_manager.get_icon("play", "play-60")))
         self.frame_slider.setValue(0)
 

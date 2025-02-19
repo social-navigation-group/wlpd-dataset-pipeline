@@ -35,12 +35,13 @@ class VideoPlayer(QWidget):
 
         self.trajectories = np.array([self.human_config.get_element(a, 'trajectories') for a in self.human_config.dict.keys()], dtype = object)
         self.traj_starts = np.array([self.human_config.get_element(a, 'traj_start') for a in self.human_config.dict.keys()])
+        self.trajectory_manager.set_trajectories(self.trajectories, self.traj_starts)
 
         self.colors = np.array([
             [255, 255, 255], [0, 255, 255], [255, 0, 255],
             [255, 255, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255]
         ], dtype = np.uint8)
-        self.num_colors = len(self.colors)
+        # self.num_colors = len(self.colors)
 
         # TIMERS
         self.timer = QTimer()
@@ -49,7 +50,8 @@ class VideoPlayer(QWidget):
 
         # GRAPHICS SCENE
         self.scene = QGraphicsScene(self)
-        self.view = TrajectoryClickHandler(self.trajectory_manager, self.trajectories, self.scene)
+        self.current_frame = 0
+        self.view = TrajectoryClickHandler(self.trajectory_manager, self.trajectories, self.scene, self.current_frame)
         self.view.setScene(self.scene) 
 
         self.pixmap_item = QGraphicsPixmapItem()
@@ -101,6 +103,7 @@ class VideoPlayer(QWidget):
             self.trajectory_worker.wait()
 
         self.trajectory_worker = TrajectoryWorker(
+            self.trajectory_manager,
             self.trajectories, 
             self.traj_starts, 
             self.colors, 
@@ -108,7 +111,7 @@ class VideoPlayer(QWidget):
             self.video_height,  
             self.total_frames,  
             self.video_fps,
-            cache_size = 30  # Preload next 30 frames only
+            cache_size = 30 # Preload next 30 frames only
         )
         self.trajectory_worker.update_overlay.connect(self.update_trajectory_overlay)
         self.trajectory_worker.start() 
@@ -134,6 +137,9 @@ class VideoPlayer(QWidget):
             self.timer.stop()
             return
 
+        self.current_frame = new_frame
+        self.view.current_frame = self.current_frame
+        self.view.update_trajectories(self.current_frame) 
         self.show_frame_at(new_frame)
 
         # STOP IF AT BOUNDARIES

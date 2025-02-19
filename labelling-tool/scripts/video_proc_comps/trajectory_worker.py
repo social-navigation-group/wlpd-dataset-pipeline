@@ -7,7 +7,7 @@ from utils.logging_utils import log_info, log_error
 class TrajectoryWorker(QThread):
     update_overlay = pyqtSignal(np.ndarray)
 
-    def __init__(self, trajectories, traj_starts, colors, video_width, video_height, total_frames, video_fps=30, cache_size=30):
+    def __init__(self, trajectory_manager, trajectories, traj_starts, colors, video_width, video_height, total_frames, video_fps=30, cache_size=30):
         super().__init__()
         self.running = True
         self.colors = colors
@@ -15,11 +15,12 @@ class TrajectoryWorker(QThread):
         self.overlay_cache = {} 
         self.video_fps = video_fps
         self.cache_size = cache_size  # Buffer only 30 frames (~1 sec)
-        self.traj_starts = traj_starts
+        # self.traj_starts = traj_starts
         self.video_width = video_width
         self.video_height = video_height
         self.trajectories = trajectories
         self.total_frames = total_frames
+        self.trajectory_manager = trajectory_manager
 
     def run(self):
         """Runs the thread and updates overlay when frame changes."""
@@ -43,23 +44,33 @@ class TrajectoryWorker(QThread):
     def _generate_overlay(self, frame_idx):
         """Generates trajectory overlay and labels for a frame."""
         overlay = np.zeros((self.video_height, self.video_width, 3), dtype = np.uint8)
+        active_trajectories = self.trajectory_manager.get_active_trajectories(frame_idx)
 
         for i, traj in enumerate(self.trajectories):
-            traj_start = self.traj_starts[i]
+            if (i + 1) not in active_trajectories:
+                continue
+
+            # traj_start = self.traj_starts[i]
+            traj_start = self.trajectory_manager.traj_starts[i + 1]
             frame_offset = frame_idx - traj_start
 
             if frame_offset < 0 or frame_offset >= len(traj):
                 continue  
 
+            # log_info(f"[DEBUG] TrajectoryWorker - Trajectory {i+1}: First Points {traj[:5]}")
+            # log_info(f"[DEBUG] TrajectoryWorker - Trajectory {i+1}: Total Points {len(traj)}")
+            log_info(f"[DEBUG] Overlay - Drawing Trajectory {i+1}: Frame {frame_idx}, Active Points: {frame_offset+1}")
+
             try:
-                past_points = traj[:frame_offset + 1]  
-                if len(past_points) > 1:
-                    for j in range(len(past_points) - 1):
-                        pt1 = self.scale_point(past_points[j])
-                        pt2 = self.scale_point(past_points[j + 1])
+                # past_points = traj[:frame_offset + 1]  
+                active_traj = traj[: max(1, frame_offset + 1)]
+                if len(active_traj) > 1:
+                    for j in range(len(active_traj) - 1):
+                        pt1 = self.scale_point(active_traj[j])
+                        pt2 = self.scale_point(active_traj[j + 1])
                         cv2.line(overlay, pt1, pt2, self.colors[i % len(self.colors)].tolist(), 2)
                         
-                        last_point = self.scale_point(past_points[-1])
+                        last_point = self.scale_point(active_traj[-1])
                         cv2.putText(overlay, str(i + 1), last_point, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 146, 35), 1, lineType=cv2.LINE_AA)
             except Exception as e:
                 log_error(f"Error processing trajectory {i} at frame {frame_idx}: {e}")

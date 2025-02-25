@@ -10,6 +10,7 @@ from utils.human_config_utils import HumanConfigUtils
 from .trajectory_click_handler import TrajectoryClickHandler
 from utils.file_utils import is_valid_video_file, get_file_size
 from utils.logging_utils import log_info, log_warning, log_error
+from utils.trajectory_color_generator import TrajectoryColorGenerator
 from PyQt6.QtWidgets import (
     QGraphicsScene, QGraphicsPixmapItem, QVBoxLayout, QWidget, QMessageBox, QSizePolicy, QApplication
 )
@@ -25,23 +26,17 @@ class VideoPlayer(QWidget):
         self.total_frames = 0  
         self.video_path = None
         self.human_config = None
+        self.trajectory_overlay = 0
         self.video_controls = video_controls
         self.resource_manager = resource_manager
         self.playback_mode = PlaybackMode.STOPPED 
-        self.trajectory_manager = TrajectoryManager()
+        self.color_generator = TrajectoryColorGenerator()
 
         self.human_config_path = self.resource_manager.get_human_config()
         self.human_config = HumanConfigUtils(self.human_config_path)
 
-        self.trajectories = np.array([self.human_config.get_element(a, 'trajectories') for a in self.human_config.dict.keys()], dtype = object)
-        self.traj_starts = np.array([self.human_config.get_element(a, 'traj_start') for a in self.human_config.dict.keys()])
-        self.trajectory_manager.set_trajectories(self.trajectories, self.traj_starts)
-
-        self.colors = np.array([
-            [255, 255, 255], [0, 255, 255], [255, 0, 255],
-            [255, 255, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255]
-        ], dtype = np.uint8)
-        # self.num_colors = len(self.colors)
+        self.trajectory_manager = TrajectoryManager(self.human_config)
+        self.trajectory_manager.set_trajectories()
 
         # TIMERS
         self.timer = QTimer()
@@ -49,13 +44,12 @@ class VideoPlayer(QWidget):
         self.timer.timeout.connect(self.update_frame)
 
         # GRAPHICS SCENE
-        self.scene = QGraphicsScene(self)
-        self.current_frame = 0
-        self.view = TrajectoryClickHandler(self.trajectory_manager, self.trajectories, self.scene, self.current_frame)
-        self.view.setScene(self.scene) 
+        self.graphics_scene = QGraphicsScene(self)
+        self.view = TrajectoryClickHandler(self.trajectory_manager, self.graphics_scene, self.trajectory_overlay, self.color_generator)
+        self.view.setScene(self.graphics_scene) 
 
         self.pixmap_item = QGraphicsPixmapItem()
-        self.scene.addItem(self.pixmap_item)
+        self.graphics_scene.addItem(self.pixmap_item)
 
         self.view.setMinimumSize(1092, 888) 
         self.view.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -104,9 +98,7 @@ class VideoPlayer(QWidget):
 
         self.trajectory_worker = TrajectoryWorker(
             self.trajectory_manager,
-            self.trajectories, 
-            self.traj_starts, 
-            self.colors, 
+            self.color_generator, 
             self.video_width,  
             self.video_height,  
             self.total_frames,  
@@ -116,7 +108,8 @@ class VideoPlayer(QWidget):
         self.trajectory_worker.update_overlay.connect(self.update_trajectory_overlay)
         self.trajectory_worker.start() 
 
-        self.trajectory_overlay = np.zeros((self.video_height, self.video_width, 3), dtype=np.uint8)
+        self.trajectory_overlay = np.zeros((self.video_height, self.video_width, 3), dtype = np.uint8)
+        self.view.trajectory_overlay = self.trajectory_overlay
         self.show_frame_at(0)
 
     def update_frame(self):
@@ -138,8 +131,7 @@ class VideoPlayer(QWidget):
             return
 
         self.current_frame = new_frame
-        self.view.current_frame = self.current_frame
-        self.view.update_trajectories(self.current_frame) 
+        self.view.current_frame = self.current_frame 
         self.show_frame_at(new_frame)
 
         # STOP IF AT BOUNDARIES
@@ -174,20 +166,28 @@ class VideoPlayer(QWidget):
             log_warning(f"Frame {frame_number} is None. Video might be corrupted or out of range.")
 
     def update_trajectory_overlay(self, overlay):
-        log_info("[DEBUG] Overlay updated")
-        self.trajectory_overlay = overlay
-        self.update()
-    
-    def display_frame(self, frame):
+        self.trajectory_overlay = np.copy(overlay)
+        log_info(f"[DEBUG] After updating, trajectory_overlay np.sum: {np.sum(self.trajectory_overlay)}")
+
+        self.view.trajectory_overlay = self.trajectory_overlay
+
+    def display_frame(self, frame, overlay = None):
         """Converts the OpenCV frame to a QPixmap and displays it."""
         if frame is None:
             log_warning("display_frame() received None frame. Skipping frame update.")
             return 
 
         try:
-            start_time = time.time()
+            # start_time = time.time()
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            overlayed_frame = cv2.addWeighted(frame, 1, self.trajectory_overlay, 0.5, 0)
+
+            if overlay is None:
+                overlay = self.trajectory_overlay
+
+            lastest_overlay = np.copy(overlay)
+            overlayed_frame = cv2.addWeighted(frame, 1, lastest_overlay, 1.0, 0)
+
+            log_info(f"[DEBUG] After blending, overlayed_frame np.sum: {np.sum(overlayed_frame)}")
 
             height, width, _ = overlayed_frame.shape
             bytes_per_line = 3 * width
@@ -200,20 +200,17 @@ class VideoPlayer(QWidget):
                 return
 
             self.pixmap_item.setPixmap(pixmap)
-            self.scene.setSceneRect(0, 0, pixmap.width(), pixmap.height())
+            log_info(f"[DEBUG] Updating display with overlay sum: {np.sum(self.trajectory_overlay)}")
+            self.graphics_scene.setSceneRect(0, 0, pixmap.width(), pixmap.height())
             self.view.fitInView(self.pixmap_item, Qt.AspectRatioMode.KeepAspectRatio)
 
-            self.view.update()
-            self.view.repaint()
-            QApplication.processEvents()
-
-            end_time = time.time()
-            render_time = (end_time - start_time) * 1000  
-            log_info(f"[PERF] Frame rendered in {render_time:.2f} ms")
+            # end_time = time.time()
+            # render_time = (end_time - start_time) * 1000  
+            # log_info(f"[PERF] Frame rendered in {render_time:.2f} ms")
         except Exception as e:
             log_error(f"Error in display_frame: {e}")
 
-    def change_playback_mode(self, mode, speed=1):
+    def change_playback_mode(self, mode, speed = 1):
         """Sets playback mode and adjusts timer settings."""
         if self.playback_mode == mode:
             self.pause()
@@ -243,7 +240,7 @@ class VideoPlayer(QWidget):
 
     def play(self, speed = 2):
         """Starts video playback."""
-        self.change_playback_mode(PlaybackMode.PLAYING, speed=speed)
+        self.change_playback_mode(PlaybackMode.PLAYING, speed = speed)
 
     def pause(self):
         """Pauses playback."""
@@ -252,8 +249,8 @@ class VideoPlayer(QWidget):
 
     def rewind(self, speed = 2):
         """Starts rewinding at the given speed."""
-        self.change_playback_mode(PlaybackMode.REWINDING, speed=speed)
+        self.change_playback_mode(PlaybackMode.REWINDING, speed = speed)
 
     def forward(self, speed = 4):
         """Starts fast-forwarding at the given speed."""
-        self.change_playback_mode(PlaybackMode.FORWARDING, speed=speed)
+        self.change_playback_mode(PlaybackMode.FORWARDING, speed = speed)

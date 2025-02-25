@@ -1,21 +1,42 @@
+from utils.logging_utils import log_info
+
 class TrajectoryManager:
-    def __init__(self):
+    def __init__(self, human_config):
         self.traj_starts = {}
         self.trajectories = {}
-        self.selected_traj = None
-        self.last_clicked_position = None
+        self.selected_trajs = []
+        self.human_config = human_config
 
-    def set_trajectories(self, trajectories, traj_starts):
-        """Stores trajectories and their start frames."""
-        self.trajectories = {traj_id: traj for traj_id, traj in enumerate(trajectories, start=1)}
-        self.traj_starts = {traj_id: start for traj_id, start in enumerate(traj_starts, start=1)}
+    def set_trajectories(self):
+        """Assigns trajectories using stored IDs"""
+        self.traj_starts = {}
+        self.trajectories = {}
 
-    def get_trajectory(self, traj_id):
-        """Returns the trajectory points for a given trajectory ID."""
-        return self.trajectories.get(traj_id, [])
+        for humanID in self.human_config.dict.keys():
+            traj = self.human_config.get_element(humanID, "trajectories")
+            start = self.human_config.get_element(humanID, "traj_start")
+
+            if traj is not None and start is not None:
+                traj_id = int(humanID.replace("human", ""))
+                self.trajectories[traj_id] = traj
+                self.traj_starts[traj_id] = start
+
+    def add_trajectory(self, new_trajectory, start_frame):
+        traj_id = self.human_config.get_newID()
+        self.trajectories[traj_id] = new_trajectory
+        self.traj_starts[traj_id] = start_frame
+
+        self.human_config.set_element(traj_id, "trajectories", new_trajectory)
+        self.human_config.set_element(traj_id, "traj_start", start_frame)
+        return traj_id
+    
+    def remove_trajectory(self, traj_id):
+        if traj_id in self.trajectories:
+            del self.trajectories[traj_id]
+            del self.traj_starts[traj_id]
+            self.human_config.delete_ID(traj_id)
 
     def get_active_trajectories(self, current_frame):
-        """Returns the list of trajectories that should be visible at the given frame."""
         active_trajectories = []
 
         for traj_id, traj_start in self.traj_starts.items():
@@ -24,22 +45,16 @@ class TrajectoryManager:
 
         return active_trajectories
 
-    def set_last_clicked_position(self, x, y):
-        """Stores the last clicked position in image coordinates."""
-        self.last_clicked_position = (x, y)
-
-    def get_last_clicked_position(self):
-        """Returns the last clicked position in image coordinates."""
-        return self.last_clicked_position
-
     def set_selected_trajectory(self, selected_traj_id):
-        """Stores the selected trajectory ID."""
-        self.selected_traj = selected_traj_id
+        if len(self.selected_trajs) < 2:
+            if selected_traj_id not in self.selected_trajs:
+                self.selected_trajs.append(selected_traj_id)
+                log_info(f"[DEBUG] Selected trajectories: {self.selected_trajs}")
+        else:
+            log_info("Two trajectories already selected. No more can be added.")
 
     def get_selected_trajectory(self):
-        """Returns the currently selected trajectory ID."""
-        return self.selected_traj
+        return list(self.selected_trajs)
 
     def clear_selection(self):
-        """Clears the selected trajectory."""
-        self.selected_traj = None
+        self.selected_trajs = []

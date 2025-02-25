@@ -1,51 +1,36 @@
+import numpy as np
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPen, QBrush
-from utils.logging_utils import log_info
+from .playback_mode import PlaybackMode
+from utils.logging_utils import log_info, log_error
 from PyQt6.QtWidgets import QGraphicsView, QGraphicsPixmapItem, QGraphicsEllipseItem
 
 class TrajectoryClickHandler(QGraphicsView):
-    def __init__(self, trajectory_manager, trajectories, scene, current_frame, parent = None):
+    def __init__(self, trajectory_manager, scene, trajectory_overlay, color_generator, parent = None):
         super().__init__(parent)
+        self.current_frame = 0
         self.graphics_scene = scene
-        self.trajectory_items = []
-        # self.selection_threshold = 90
-        self.current_frame = current_frame
-        self.trajectory_manager = trajectory_manager  
+        self.dual_selection_enabled = False
+        self.color_generator = color_generator
+        self.trajectory_manager = trajectory_manager 
+        self.trajectory_overlay = trajectory_overlay
 
-        # log_info(f"[DEBUG] Initializing {len(trajectories)} trajectories")
-
-        for traj_id, traj in enumerate(trajectories, start = 1):
-            # log_info(f"[DEBUG] ClickHandler - Storing Traj {traj_id}: {traj[:5]} (first 5 points)")
-
-            traj_graphics = []
-            active_traj = traj[:max(1, self.current_frame)]
-            # log_info(f"Adding trajectory {traj_id} with {len(active_traj)} active points.")
-
-            for point_x, point_y in active_traj:
-                point_item = QGraphicsEllipseItem(point_x - 3, point_y - 3, 6, 6)
-                self.graphics_scene.addItem(point_item)
-                traj_graphics.append(point_item)
-
-            self.trajectory_items.append((traj_id, traj_graphics))
-            log_info(f"Stored {len(self.trajectory_items)} trajectories (Active Points: {len(active_traj)})")
-
-        # log_info(f"[DEBUG] ClickHandler - Trajectory 2 First Points: {self.trajectory_items[1][:5]}")
-        # log_info(f"[DEBUG] ClickHandler - Traj 2: Total Points: {len(self.trajectory_items[1])}")
-
-    
     def mousePressEvent(self, event):
         """Handles mouse click events and selects the closest trajectory."""
         scene_pos = self.mapToScene(event.position().toPoint())
         log_info(f"User clicked at Scene Coordinates: ({scene_pos.x()}, {scene_pos.y()})")
 
-        # mapped_click = self.mapFromScene(scene_pos)
-        # log_info(f"[DEBUG] Mapped Click Back to Scene: ({mapped_click.x()}, {mapped_click.y()})")
-
         # Draw a red marker at the clicked position
-        # click_marker = QGraphicsEllipseItem(scene_pos.x() - 5, scene_pos.y() - 5, 10, 10)
-        # click_marker.setPen(QPen(Qt.GlobalColor.red, 2))
-        # click_marker.setBrush(QBrush(Qt.GlobalColor.red))
-        # self.graphics_scene.addItem(click_marker)
+        click_marker = QGraphicsEllipseItem(scene_pos.x() - 5, scene_pos.y() - 5, 10, 10)
+        click_marker.setPen(QPen(Qt.GlobalColor.red, 2))
+        click_marker.setBrush(QBrush(Qt.GlobalColor.red))
+        self.graphics_scene.addItem(click_marker)
+
+        if self.trajectory_overlay is None:
+            log_error("ERROR: Click handler has no overlay assigned!")
+            return
+
+        found_trajectory = False
 
         for item in self.graphics_scene.items(scene_pos):
             if isinstance(item, QGraphicsPixmapItem):
@@ -55,99 +40,80 @@ class TrajectoryClickHandler(QGraphicsView):
 
                 orig_x = int((item_pos.x() / pixmap_item.boundingRect().width()) * pixmap_rect.width())
                 orig_y = int((item_pos.y() / pixmap_item.boundingRect().height()) * pixmap_rect.height())
+                log_info(f"Mapped pixel coordinates: (x={orig_x}, y={orig_y})")
 
-                # log_info(f"[DEBUG] ClickHandler - Bounding Box: {pixmap_item.boundingRect()}")
-                # log_info(f"Mapped Click to Image Coordinates: ({orig_x}, {orig_y})")
-
-                selected_traj_id, nearest_x, nearest_y = self.find_nearest_trajectory(orig_x, orig_y)
-
-                # Draw a blue marker at the nearest trajectory point
-                # if nearest_x is not None and nearest_y is not None:
-                    # traj_marker = QGraphicsEllipseItem(nearest_x - 5, nearest_y - 5, 10, 10)
-                    # traj_marker.setPen(QPen(Qt.GlobalColor.blue, 2))
-                    # traj_marker.setBrush(QBrush(Qt.GlobalColor.blue))
-                    # self.graphics_scene.addItem(traj_marker)
+                selected_traj_id = self.get_trajectory_from_overlay(orig_x, orig_y)  
 
                 if selected_traj_id is not None:
                     log_info(f"Selected trajectory ID: {selected_traj_id}")
+                    if not self.dual_selection_enabled:
+                        self.trajectory_manager.clear_selection()
+        
                     self.trajectory_manager.set_selected_trajectory(selected_traj_id)
                     self.highlight_selected_trajectory(selected_traj_id)
-                else:
-                    log_info("No trajectory selected")
-                    self.trajectory_manager.clear_selection()
+                    
+                    found_trajectory = True
+                    break
+
+        log_info(f"[DEBUG] Found trajectory? {found_trajectory}") 
+            
+        if not found_trajectory:
+            log_info("No trajectory selected, clearing highlight.")
+            self.clear_highlight()
 
         super().mousePressEvent(event)
+
+    def get_trajectory_from_overlay(self, x, y):
+        if self.trajectory_overlay is None:
+            log_info("Trajectory overlay is None")
+            return None
+        
+        if not (0 <= x < self.trajectory_overlay.shape[1] and 0 <= y < self.trajectory_overlay.shape[0]):
+            log_info(f"Click out of bounds: (x={x}, y={y}), Overlay size: {self.trajectory_overlay.shape}")
+            return None
+
+        TOLERANCE = 30
+        SEARCH_RADIUS = 10
+
+        for delta_y in range(-SEARCH_RADIUS, SEARCH_RADIUS + 1):
+            for delta_x in range(-SEARCH_RADIUS, SEARCH_RADIUS + 1):
+                new_y, new_x = (y + delta_y), x + delta_x
+                if 0 <= new_x < self.trajectory_overlay.shape[1] and 0 <= new_y < self.trajectory_overlay.shape[0]:
+                    color_at_point = self.trajectory_overlay[new_y, new_x]
+
+                    for traj_id, color in self.color_generator.get_active_colors().items():
+                        if np.linalg.norm(color_at_point.astype(int) - color.astype(int)) < TOLERANCE:
+                            log_info(f"Matched trajectory {traj_id} at offset ({delta_x}, {delta_y})")
+                            return traj_id
+                        
+        log_info("No trajectory found in neighborhood")
+        return None
     
-    def find_nearest_trajectory(self, x, y):
-        """Selects only the trajectory point that the user directly clicks on."""
-        active_trajectories = self.trajectory_manager.get_active_trajectories(self.current_frame)
-        # log_info(f"Checking click at ({x}, {y}) against active trajectories: {active_trajectories}")
+    def highlight_selected_trajectory(self, traj_id):
+        log_info(f"Highlighting trajectory {traj_id}")
+        self.trajectory_manager.set_selected_trajectory(traj_id)
+        self.refresh_frame_if_paused()
 
-        for traj_id, traj_points in self.trajectory_items:
-            if traj_id not in active_trajectories:
-                continue
+    def clear_highlight(self):
+        """Removes the highlight when clicking outside a trajectory."""
+        log_info("[DEBUG] Clearing highlight")
+        log_info(f"[DEBUG] Current selected trajectory: {self.trajectory_manager.get_selected_trajectory()}")
 
-            for point_item in traj_points:
-                if isinstance(point_item, QGraphicsEllipseItem):
-                    point_scene_pos = point_item.sceneBoundingRect()
+        if self.trajectory_manager.get_selected_trajectory() is None:
+            log_info("[DEBUG] No trajectory was highlighted, skipping clear.")
+            return
+        
+        self.trajectory_manager.clear_selection()
+        self.refresh_frame_if_paused()
 
-                    if point_scene_pos.contains(x, y):
-                        log_info(f"? Click was inside trajectory {traj_id} at ({x}, {y}). Selecting immediately.")
-                        return traj_id, point_scene_pos.center().x(), point_scene_pos.center().y()
+    def refresh_frame_if_paused(self):
+        if self.parent().playback_mode == PlaybackMode.STOPPED:
+            log_info("[DEBUG] Video is paused, refreshing frame.")
 
-        log_info("? No trajectory point was clicked. No selection made.")
-        return None, None, None
+            if self.parent().current_frame < self.parent().total_frames - 1:
+                temp_frame = self.parent().current_frame + 1  
+            else:
+                temp_frame = self.parent().current_frame - 1  
 
-    def update_trajectories(self, current_frame):
-        """Dynamically updates trajectory points based on the current frame while preserving the highlighted trajectory."""
-        # log_info(f"[DEBUG] Updating Trajectories at Frame {current_frame}")
-
-        active_trajectories = self.trajectory_manager.get_active_trajectories(current_frame)  
-        selected_traj_id = self.trajectory_manager.get_selected_trajectory()  
-
-        for traj_id, (_, traj_graphics) in enumerate(self.trajectory_items, start = 1):
-            if traj_id not in active_trajectories:
-                for item in traj_graphics:
-                    self.graphics_scene.removeItem(item)
-                traj_graphics.clear()
-                continue  
-
-            active_traj = self.trajectory_manager.get_trajectory(traj_id)[: max(1, current_frame)]
-            if len(active_traj) == len(traj_graphics):  
-                continue  
-
-            for item in traj_graphics:
-                self.graphics_scene.removeItem(item)
-            traj_graphics.clear()
-
-            for point_x, point_y in active_traj:
-                point_item = QGraphicsEllipseItem(point_x - 3, point_y - 3, 6, 6)
-                if traj_id == selected_traj_id:
-                    point_item.setPen(QPen(Qt.GlobalColor.green, 3))
-                    point_item.setBrush(QBrush(Qt.GlobalColor.green))
-                '''else:
-                    point_item.setPen(QPen(Qt.GlobalColor.blue, 1))
-                    point_item.setBrush(QBrush(Qt.GlobalColor.blue))'''
-
-                self.graphics_scene.addItem(point_item)
-                traj_graphics.append(point_item)
-
-            log_info(f"[DEBUG] Updated Trajectory {traj_id}: {len(traj_graphics)} points")
-
-        self.graphics_scene.update()
-        self.update()
-    
-    def highlight_selected_trajectory(self, selected_traj_id):
-        log_info(f"Highlighting trajectory {selected_traj_id}")
-
-        if selected_traj_id is not None:
-            for traj_id_iter, traj_items in self.trajectory_items:
-                if traj_id_iter == selected_traj_id:
-                    for item in traj_items:
-                        if isinstance(item, QGraphicsEllipseItem):
-                            log_info(f"Setting Trajectory {selected_traj_id} to GREEN")
-                            item.setPen(QPen(Qt.GlobalColor.green, 3))
-                            item.setBrush(QBrush(Qt.GlobalColor.green))
-
-        self.graphics_scene.update()
-        self.update()
+            self.parent().show_frame_at(temp_frame) 
+            self.parent().show_frame_at(self.parent().current_frame) 

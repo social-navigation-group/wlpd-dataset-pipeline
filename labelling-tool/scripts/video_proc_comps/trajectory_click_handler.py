@@ -42,7 +42,7 @@ class TrajectoryClickHandler(QGraphicsView):
                     self.trajectory_manager.updateFrame.emit(self.current_frame + 30)
                     return
             self.trajectory_manager.drawingFinished.emit(1)
-            print('Blank clicked.')
+            log_info('Blank clicked.')
             for item in self.graphics_scene.items():
                 if isinstance(item, QGraphicsEllipseItem):
                     self.graphics_scene.removeItem(item)

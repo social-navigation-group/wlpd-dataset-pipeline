@@ -173,7 +173,6 @@ class ButtonController():
         
         self.backup()
         self.trajectory_manager.set_newValues(new_trajID, startFrame, new_trajectories)
-        print(self.trajectory_manager.traj_starts)
         
         log_info(f"Added missed person: {new_trajID}")
         

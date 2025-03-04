@@ -281,7 +281,25 @@ class ButtonController():
         traj_start = self.trajectory_manager.traj_starts[humanID]
         trajectories_old = self.trajectory_manager.trajectories[humanID]
         
-        new_trajectories = trajectories_old[:(startFrame - traj_start)] + new_trajectories
+        if startFrame > traj_start:
+            traj_end = traj_start + len(trajectories_old)
+            new_traj_end = startFrame + len(new_trajectories)
+            tmp_traj = []
+            if new_traj_end < traj_end:
+                tmp_traj = trajectories_old[(new_traj_end - traj_end):]
+            new_trajectories = trajectories_old[:(startFrame - traj_start)] + new_trajectories + tmp_traj
+        else:
+            tmp_traj = []
+            new_traj_end = startFrame + len(new_trajectories)
+            start_pos = new_trajectories[-1]
+            end_pos = trajectories_old[0]
+            if new_traj_end  < traj_start:
+                for i in range(traj_start - new_traj_end - 1):
+                    tmp_pos0 = start_pos[0] + (end_pos[0] - start_pos[0]) * (i + 1) / (traj_start - new_traj_end)
+                    tmp_pos1 = start_pos[1] + (end_pos[1] - start_pos[1]) * (i + 1) / (traj_start - new_traj_end)
+                    tmp_traj.append([tmp_pos0, tmp_pos1])
+            new_trajectories = new_trajectories + tmp_traj + trajectories_old[(startFrame + len(new_trajectories) - traj_start):]
+            traj_start = startFrame
         
         self.backup()
         self.trajectory_manager.set_newValues(humanID, traj_start, new_trajectories)
@@ -332,10 +350,35 @@ class ButtonController():
            + Delete the trajectory data of latter one."""
         traj_start1 = self.trajectory_manager.traj_starts[humanID1]
         traj_start2 = self.trajectory_manager.traj_starts[humanID2]
+
+        if traj_start2 < traj_start1:
+            humanID1, humanID2 = humanID2, humanID1
+            traj_start1, traj_start2 = traj_start2, traj_start1
+
         trajectories1 = self.trajectory_manager.trajectories[humanID1]
         trajectories2 = self.trajectory_manager.trajectories[humanID2]
+        traj_end1 = traj_start1 + len(trajectories1) - 1
+        if traj_start2 <= traj_end1:
+            tmp_traj_len = traj_end1 - traj_start2 + 1
+            tmp_traj = []
+            for i in range(tmp_traj_len):
+                wt = 1 - (i + 1) / (tmp_traj_len + 1)
+                tmp_pos0 = trajectories1[-tmp_traj_len + i][0] * wt + trajectories2[i][0] * (1 - wt)
+                tmp_pos1 = trajectories1[-tmp_traj_len + i][1] * wt + trajectories2[i][1] * (1 - wt)
+                tmp_traj.append([tmp_pos0, tmp_pos1])
+            trajectories_new = trajectories1[:-tmp_traj_len] + tmp_traj + trajectories2[tmp_traj_len:]
+        else:
+            tmp_traj_len = traj_start2 - traj_end1 - 1
+            tmp_traj = []
+            start_pos = trajectories1[-1]
+            end_pos = trajectories2[0]
+            for i in range(tmp_traj_len):
+                tmp_pos0 = start_pos[0] + (end_pos[0] - start_pos[0]) * (i + 1) / (tmp_traj_len + 1)
+                tmp_pos1 = start_pos[1] + (end_pos[1] - start_pos[1]) * (i + 1) / (tmp_traj_len + 1)
+                tmp_traj.append([tmp_pos0, tmp_pos1])
+            trajectories_new = trajectories1 + tmp_traj + trajectories2
         
-        trajectories_new = trajectories1[:startFrame - traj_start1] + trajectories2[startFrame - traj_start2:]
+        # trajectories_new = trajectories1[:startFrame - traj_start1] + trajectories2[startFrame - traj_start2:]
         
         self.backup()
         self.trajectory_manager.set_newValues(humanID1, traj_start1, trajectories_new)

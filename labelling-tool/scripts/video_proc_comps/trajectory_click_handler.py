@@ -24,7 +24,6 @@ class TrajectoryClickHandler(QGraphicsView):
             print(self.trajectory_manager.isDrawing)
             self.draw_red_circles(scene_pos)
 
-            # Drawing finish when clicking at blank.
             for item in self.graphics_scene.items(scene_pos):
                 if isinstance(item, QGraphicsPixmapItem):
                     pixmap_item = item
@@ -72,7 +71,7 @@ class TrajectoryClickHandler(QGraphicsView):
                     self.highlight_selected_trajectory(selected_traj_id)
                     
                     found_trajectory = True
-                    break
+                    break 
             
         if not found_trajectory:
             log_info("No trajectory selected, clearing highlight.")

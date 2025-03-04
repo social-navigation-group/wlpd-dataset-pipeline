@@ -8,6 +8,8 @@ class TrajectoryManager(QObject):
     updateFrame = pyqtSignal(int)
     
     def __init__(self, human_config):
+        UNDO_LIMIT = 10
+
         super().__init__()
         self.traj_starts = {}
         self.trajectories = {}
@@ -19,6 +21,7 @@ class TrajectoryManager(QObject):
         
         self.trajectory_now = []
         self.backup_data = []
+        self.backup_limit = UNDO_LIMIT
 
     def set_trajectories(self):
         """Assigns trajectories using stored IDs"""
@@ -91,9 +94,14 @@ class TrajectoryManager(QObject):
         return
 
     def backup(self):
+        if len(self.backup_data) >= self.backup_limit:
+            self.backup_data.pop(0)
         self.backup_data.append([deepcopy(self.traj_starts), deepcopy(self.trajectories)])
     
     def undo(self):
+        if len(self.backup_data) == 0:
+            log_info("No more backup data to undo.")
+            return
         (traj_starts_old, trajectories_old) = self.backup_data.pop(-1)
         self.traj_starts = traj_starts_old
         self.trajectories = trajectories_old

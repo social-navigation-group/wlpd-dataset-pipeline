@@ -114,7 +114,7 @@ class ButtonController():
                 
                 # Join
                 elif self.mode == 4:
-                    self.join_func(selected_IDs[0], selected_IDs[1], self.startFrame)
+                    self.join_func(selected_IDs[0], selected_IDs[1])
                     
                 # Delete
                 elif self.mode == 5:
@@ -202,7 +202,7 @@ class ButtonController():
         self.trajectory_manager.clear_selection()
         self.mode = 0
         
-    def join_func(self, humanID1, humanID2, startFrame):
+    def join_func(self, humanID1, humanID2):
         """Join function: join 2 trajectories into one.
            + Delete the trajectory data of latter one."""
         traj_start1 = self.trajectory_manager.traj_starts[humanID1]
@@ -213,7 +213,7 @@ class ButtonController():
         if traj_start1 + len(trajectories1) < traj_start2:
             trajectories1 = self.interpolate(traj_start1, trajectories1, traj_start2, trajectories2)
         
-        trajectories_new = trajectories1[:startFrame - traj_start1] + trajectories2[startFrame - traj_start2:]
+        trajectories_new = self.blend(traj_start1, trajectories1, traj_start2, trajectories2)
         
         self.backup()
         self.trajectory_manager.set_newValues(humanID1, traj_start1, trajectories_new)
@@ -238,6 +238,21 @@ class ButtonController():
             trajectories1.append([new_x, new_y])
         
         return trajectories1
+
+    def blend(self, traj_start1, trajectories1, traj_start2, trajectories2):
+        """Blend 2 trajectories for Join function."""
+        # trajectories_new = trajectories1[:startFrame - traj_start1] + trajectories2[startFrame - traj_start2:]
+        trajectories_new = trajectories1[:traj_start2 - traj_start1]
+        frames_to_blend = traj_start1 + len(trajectories1) - traj_start2
+        traj1_to_blend = trajectories1[traj_start2 - traj_start1:]
+        traj2_to_blend = trajectories2[:frames_to_blend]
+        for i in range(frames_to_blend):
+            new_x = (traj1_to_blend[i][0] * (frames_to_blend - i) + traj2_to_blend[i][0] * i) / frames_to_blend
+            new_y = (traj1_to_blend[i][1] * (frames_to_blend - i) + traj2_to_blend[i][1] * i) / frames_to_blend
+            trajectories_new.append([new_x, new_y])
+        
+        trajectories_new += trajectories2[frames_to_blend:]
+        return trajectories_new
         
     def delete_func(self, humanID):
         """Delete function: delete trajectory."""

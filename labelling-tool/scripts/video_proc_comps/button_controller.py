@@ -210,6 +210,9 @@ class ButtonController():
         trajectories1 = self.trajectory_manager.trajectories[humanID1]
         trajectories2 = self.trajectory_manager.trajectories[humanID2]
         
+        if traj_start1 + len(trajectories1) < traj_start2:
+            trajectories1 = self.interpolate(traj_start1, trajectories1, traj_start2, trajectories2)
+        
         trajectories_new = trajectories1[:startFrame - traj_start1] + trajectories2[startFrame - traj_start2:]
         
         self.backup()
@@ -220,6 +223,21 @@ class ButtonController():
         
         self.trajectory_manager.clear_selection()
         self.mode = 0
+    
+    def interpolate(self, traj_start1, trajectories1, traj_start2, trajectories2):
+        """Interpolate former trajectory to connect latter trajectory
+           (for Join function)."""
+           
+        frames_to_interpolate = traj_start2 - (traj_start1 + len(trajectories1))
+        start_coord = trajectories1[-1]
+        last_coord = trajectories2[0]
+        
+        for i in range(frames_to_interpolate):
+            new_x = (start_coord[0] * (frames_to_interpolate - 1) + last_coord[0] * (i + 1)) / (frames_to_interpolate + 1)
+            new_y = (start_coord[1] * (frames_to_interpolate - 1) + last_coord[1] * (i + 1)) / (frames_to_interpolate + 1)
+            trajectories1.append([new_x, new_y])
+        
+        return trajectories1
         
     def delete_func(self, humanID):
         """Delete function: delete trajectory."""

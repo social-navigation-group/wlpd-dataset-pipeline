@@ -12,12 +12,12 @@ from utils.file_utils import is_valid_video_file, get_file_size
 from utils.logging_utils import log_info, log_warning, log_error
 from utils.trajectory_color_generator import TrajectoryColorGenerator
 from PyQt6.QtWidgets import (
-    QGraphicsScene, QGraphicsPixmapItem, QVBoxLayout, QWidget, QMessageBox, QSizePolicy, QApplication
+    QGraphicsScene, QGraphicsPixmapItem, QVBoxLayout, QWidget, QMessageBox, QSizePolicy
 )
 
 class VideoPlayer(QWidget):
-    def __init__(self, video_controls, resource_manager):
-        super().__init__()
+    def __init__(self, video_controls, resource_manager, parent = None):
+        super().__init__(parent)
         self.cap = None
         self.video_fps = 30  
         self.video_width = 0
@@ -37,6 +37,8 @@ class VideoPlayer(QWidget):
 
         self.trajectory_manager = TrajectoryManager(self.human_config)
         self.trajectory_manager.set_trajectories()
+        
+        self.trajectory_manager.updateFrame.connect(self.show_frame_at)
 
         # TIMERS
         self.timer = QTimer()
@@ -129,6 +131,9 @@ class VideoPlayer(QWidget):
         else:
             self.timer.stop()
             return
+        
+        # if abs(new_frame - current_frame) > self.video_fps // 2:  # 
+            # self.cap.set(cv2.CAP_PROP_POS_FRAMES, new_frame)
 
         self.current_frame = new_frame
         self.view.current_frame = self.current_frame 
@@ -158,10 +163,15 @@ class VideoPlayer(QWidget):
                 else:
                     log_warning(f"Failed to read frame {frame_number}")
                     return
+                
+        #if self.playback_mode in [PlaybackMode.REWINDING, PlaybackMode.FORWARDING] or frame_number not in self.frame_cache:
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
 
-        if frame is not None:
+        if frame is not None:  
             self.display_frame(frame)
+            # self.frame_cache[frame_number] = frame 
+            self.current_frame = frame_number
+            self.view.current_frame = frame_number
         else:
             log_warning(f"Frame {frame_number} is None. Video might be corrupted or out of range.")
 
@@ -238,7 +248,7 @@ class VideoPlayer(QWidget):
         self.trajectory_overlay = np.zeros((self.video_height, self.video_width, 3), dtype = np.uint8)
         self.display_frame(self.frame_cache.get(0))  
 
-    def play(self, speed = 2):
+    def play(self, speed = 3):
         """Starts video playback."""
         self.change_playback_mode(PlaybackMode.PLAYING, speed = speed)
 
@@ -247,7 +257,7 @@ class VideoPlayer(QWidget):
         self.timer.stop()
         self.playback_mode = PlaybackMode.STOPPED
 
-    def rewind(self, speed = 2):
+    def rewind(self, speed = 3):
         """Starts rewinding at the given speed."""
         self.change_playback_mode(PlaybackMode.REWINDING, speed = speed)
 

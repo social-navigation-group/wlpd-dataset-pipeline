@@ -20,12 +20,26 @@ class TrajectoryClickHandler(QGraphicsView):
         scene_pos = self.mapToScene(event.position().toPoint())
         log_info(f"User clicked at Scene Coordinates: ({scene_pos.x()}, {scene_pos.y()})")
 
-        # Draw a red marker at the clicked position
-        click_marker = QGraphicsEllipseItem(scene_pos.x() - 5, scene_pos.y() - 5, 10, 10)
-        click_marker.setPen(QPen(Qt.GlobalColor.red, 2))
-        click_marker.setBrush(QBrush(Qt.GlobalColor.red))
-        self.graphics_scene.addItem(click_marker)
+        if self.trajectory_manager.isDrawing:
+            print(self.trajectory_manager.isDrawing)
+            self.draw_red_circles(scene_pos)
 
+            # Drawing finish when clicking at blank.
+            for item in self.graphics_scene.items(scene_pos):
+                if isinstance(item, QGraphicsPixmapItem):
+                    pixmap_item = item
+                    pixmap_rect = pixmap_item.pixmap().rect()
+                    item_pos = pixmap_item.mapFromScene(scene_pos)
+
+                    orig_x = int((item_pos.x() / pixmap_item.boundingRect().width()) * pixmap_rect.width())
+                    orig_y = int((item_pos.y() / pixmap_item.boundingRect().height()) * pixmap_rect.height())
+                    log_info(f"Mapped pixel coordinates: (x={orig_x}, y={orig_y})")
+                    
+                    self.trajectory_manager.store_newTrajectory(orig_x, orig_y)
+                    self.trajectory_manager.updateFrame.emit(self.current_frame + 30)
+                    return
+            return
+                    
         if self.trajectory_overlay is None:
             log_error("ERROR: Click handler has no overlay assigned!")
             return
@@ -46,16 +60,19 @@ class TrajectoryClickHandler(QGraphicsView):
 
                 if selected_traj_id is not None:
                     log_info(f"Selected trajectory ID: {selected_traj_id}")
-                    if not self.dual_selection_enabled:
-                        self.trajectory_manager.clear_selection()
-        
-                    self.trajectory_manager.set_selected_trajectory(selected_traj_id)
+                    if self.trajectory_manager.isWaitingID:
+                        self.trajectory_manager.set_selected_trajectory(selected_traj_id)
+
+                        if self.get_ui_class().button_controller.mode != 2:
+                            self.write_traj_id_on_input(str(selected_traj_id + 1))
+
+                        for item in self.graphics_scene.items():
+                            if isinstance(item, QGraphicsEllipseItem):
+                                self.graphics_scene.removeItem(item)
                     self.highlight_selected_trajectory(selected_traj_id)
                     
                     found_trajectory = True
                     break
-
-        log_info(f"[DEBUG] Found trajectory? {found_trajectory}") 
             
         if not found_trajectory:
             log_info("No trajectory selected, clearing highlight.")
@@ -72,7 +89,7 @@ class TrajectoryClickHandler(QGraphicsView):
             log_info(f"Click out of bounds: (x={x}, y={y}), Overlay size: {self.trajectory_overlay.shape}")
             return None
 
-        TOLERANCE = 30
+        TOLERANCE = 10
         SEARCH_RADIUS = 10
 
         for delta_y in range(-SEARCH_RADIUS, SEARCH_RADIUS + 1):
@@ -117,3 +134,25 @@ class TrajectoryClickHandler(QGraphicsView):
 
             self.parent().show_frame_at(temp_frame) 
             self.parent().show_frame_at(self.parent().current_frame) 
+
+    def get_ui_class(self):
+        video_controls = self.parent().parent()
+        main_window = video_controls.parent().parent().parent()
+        tab_dialog = main_window.tab_dialog
+        trajectory_controls = tab_dialog.trajectory_controls
+
+        return trajectory_controls
+
+    def write_traj_id_on_input(self, traj_id):
+        trajectory_controls = self.get_ui_class()
+        
+        h_layout = trajectory_controls.labeling_layout.itemAt(1).layout()
+        line_edit = h_layout.itemAt(0).widget() 
+        line_edit.setText(traj_id)
+
+    def draw_red_circles(self, scene_pos):
+        click_marker = QGraphicsEllipseItem(scene_pos.x() - 5, scene_pos.y() - 5, 10, 10)
+        click_marker.setPen(QPen(Qt.GlobalColor.red, 2))
+        click_marker.setBrush(QBrush(Qt.GlobalColor.red))
+        self.graphics_scene.addItem(click_marker)
+        return click_marker

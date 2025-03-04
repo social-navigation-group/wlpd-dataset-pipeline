@@ -2,7 +2,7 @@ import os
 import logging
 from .file_utils import ensure_directory_exists
 
-def setup_logger(name: str, log_file: str, level=logging.INFO):
+def setup_logger(name: str, log_file: str, level = logging.INFO):
     """Sets up a logger with a specific name and log file."""
     ensure_directory_exists(os.path.dirname(log_file))
 

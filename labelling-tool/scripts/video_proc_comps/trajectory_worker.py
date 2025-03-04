@@ -20,8 +20,6 @@ class TrajectoryWorker(QThread):
         self.color_generator = color_generator
         self.trajectory_manager = trajectory_manager
 
-        self.colors = None
-
     def run(self):
         """Runs the thread and updates overlay when frame changes."""
         last_frame = -1  

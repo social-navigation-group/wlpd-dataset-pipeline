@@ -12,11 +12,11 @@ from PyQt6.QtWidgets import (
 )
 
 class VideoControls(QWidget):
-    def __init__(self, resource_manager: str):
-        super().__init__()
+    def __init__(self, resource_manager: str, parent = None):
+        super().__init__(parent)
         self.resource_manager = resource_manager
         self.resources_path = self.resource_manager.resources_path
-        self.video_player = VideoPlayer(self, self.resource_manager)
+        self.video_player = VideoPlayer(self, self.resource_manager, self)
 
         # VIDEO FILE DROPDOWN
         self.video_dropdown = QComboBox()

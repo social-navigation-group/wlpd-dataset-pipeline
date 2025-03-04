@@ -329,10 +329,10 @@ class ButtonController():
         trajectories_old = self.trajectory_manager.trajectories[humanID]
         
         traj_start_new1 = traj_start_old
-        traj_start_new2 = startFrame
+        traj_start_new2 = startFrame + 1
         
         trajectories_new1 = trajectories_old[:(startFrame - traj_start_old)]
-        trajectories_new2 = trajectories_old[(startFrame - traj_start_old):]
+        trajectories_new2 = trajectories_old[(startFrame - traj_start_old + 1):]
         
         self.backup()
         self.trajectory_manager.set_newValues(humanID, traj_start_new1, trajectories_new1)
@@ -437,6 +437,8 @@ class ButtonController():
         
     def backup(self):
         """Make backup of human_config for Undo."""
+        if len(self.human_config_backup) >= self.trajectory_manager.backup_limit:
+            self.human_config_backup.pop(0)
         self.human_config_backup.append(deepcopy(self.human_config))
         self.trajectory_manager.backup()
 

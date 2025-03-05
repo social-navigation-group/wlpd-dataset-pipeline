@@ -7,22 +7,23 @@ from utils.logging_utils import log_info, log_error
 
 class ButtonController():
     def __init__(self, trajectory_controls):
+        self.startFrame = 0
         self.prev_operation_btn = 0
         self.cancel_operation = False
         self.trajectory_controls = trajectory_controls
         self.video_player = self.trajectory_controls.video_player    
-        self.trajectory_click_handler = self.video_player.view
         self.human_config = self.video_player.human_config
+        self.trajectory_click_handler = self.video_player.view
         self.trajectory_manager = self.video_player.trajectory_manager
         
         self.trajectory_manager.drawingFinished.connect(self.on_drawFinished)
         self.trajectory_manager.ID_selected.connect(self.on_ID_selected)
         
-        self.human_config_backup = []
         self.mode = 0
+        self.human_config_backup = []
         """0: Default, 1: Relabel, 2: Missing, 3: Break, 4: Join, 
            5: Delete, 6: Disentagle"""
-    
+
     def on_relabel_clicked(self):
         """Relabel Clicking Fuction: Appears QLineEdit and starts waiting for trajectory ID input."""
         log_info("Relabel button was pushed.")
@@ -149,6 +150,7 @@ class ButtonController():
             self.trajectory_manager.isWaitingID = False
             self.trajectory_manager.isDrawing = False
             self.cancel_operation = False
+            # self.trajectory_click_handler.one_selection_only = False
             return
 
         if self.trajectory_manager.get_selected_trajectory() == []:
@@ -165,6 +167,7 @@ class ButtonController():
                 log_info("Click a trajectory or input trajectory ID.")
                 self.trajectory_controls.create_trajID_input(self.trajectory_controls.labeling_layout, 1, self.mode)
             self.trajectory_manager.isWaitingID = True
+            # self.trajectory_click_handler.one_selection_only = True
         else:
             selected_IDs = self.trajectory_manager.get_selected_trajectory()
             if len(selected_IDs) == 1 and self.mode in [4, 6]:
@@ -192,7 +195,7 @@ class ButtonController():
                 
                 # Join
                 elif self.mode == 4:
-                    self.join_func(selected_IDs[0], selected_IDs[1], self.startFrame)
+                    self.join_func(selected_IDs[0], selected_IDs[1])
                     
                 # Delete
                 elif self.mode == 5:
@@ -247,6 +250,7 @@ class ButtonController():
                         self.trajectory_manager.drawingFinished.emit(1)
 
                         graphic_scene.removeItem(item)
+                        # self.trajectory_click_handler.one_selection_only = False
                         self.highlight_selected_button(self.prev_operation_btn)
 
             if not red_circle_found:
@@ -259,6 +263,8 @@ class ButtonController():
                 self.trajectory_manager.updateFrame.emit(self.startFrame)
                 
             self.mode = 0
+            # self.trajectory_click_handler.one_selection_only = False
+            self.highlight_selected_button(self.prev_operation_btn)
 
     def on_drawFinished(self):
         """Functions for after drawing trajecotries."""
@@ -281,10 +287,12 @@ class ButtonController():
         traj_start = self.trajectory_manager.traj_starts[humanID]
         trajectories_old = self.trajectory_manager.trajectories[humanID]
         
+        # new_trajectories = trajectories_old[:(startFrame - traj_start)] + new_trajectories
         if startFrame > traj_start:
             traj_end = traj_start + len(trajectories_old)
             new_traj_end = startFrame + len(new_trajectories)
             tmp_traj = []
+
             if new_traj_end < traj_end:
                 tmp_traj = trajectories_old[(new_traj_end - traj_end):]
             new_trajectories = trajectories_old[:(startFrame - traj_start)] + new_trajectories + tmp_traj
@@ -293,11 +301,13 @@ class ButtonController():
             new_traj_end = startFrame + len(new_trajectories)
             start_pos = new_trajectories[-1]
             end_pos = trajectories_old[0]
+
             if new_traj_end  < traj_start:
                 for i in range(traj_start - new_traj_end - 1):
                     tmp_pos0 = start_pos[0] + (end_pos[0] - start_pos[0]) * (i + 1) / (traj_start - new_traj_end)
                     tmp_pos1 = start_pos[1] + (end_pos[1] - start_pos[1]) * (i + 1) / (traj_start - new_traj_end)
                     tmp_traj.append([tmp_pos0, tmp_pos1])
+
             new_trajectories = new_trajectories + tmp_traj + trajectories_old[(startFrame + len(new_trajectories) - traj_start):]
             traj_start = startFrame
         
@@ -312,13 +322,10 @@ class ButtonController():
     def missing_func(self, startFrame, new_trajectories):
         """Missing function: add trajecotory with drawed trajectory."""
         new_trajID = self.human_config.newID_init()
-        
         self.backup()
         self.trajectory_manager.set_newValues(new_trajID, startFrame, new_trajectories)
-        print(self.trajectory_manager.traj_starts)
         
         log_info(f"Added missed person: {new_trajID}")
-        
         self.trajectory_manager.clear_selection()
         self.mode = 0
     
@@ -345,7 +352,7 @@ class ButtonController():
         self.trajectory_manager.clear_selection()
         # self.mode = 0
         
-    def join_func(self, humanID1, humanID2, startFrame):
+    def join_func(self, humanID1, humanID2):
         """Join function: join 2 trajectories into one.
            + Delete the trajectory data of latter one."""
         traj_start1 = self.trajectory_manager.traj_starts[humanID1]
@@ -357,10 +364,14 @@ class ButtonController():
 
         trajectories1 = self.trajectory_manager.trajectories[humanID1]
         trajectories2 = self.trajectory_manager.trajectories[humanID2]
+        
+        # trajectories_new = trajectories1[:startFrame - traj_start1] + trajectories2[startFrame - traj_start2:]
         traj_end1 = traj_start1 + len(trajectories1) - 1
+
         if traj_start2 <= traj_end1:
             tmp_traj_len = traj_end1 - traj_start2 + 1
             tmp_traj = []
+
             for i in range(tmp_traj_len):
                 wt = 1 - (i + 1) / (tmp_traj_len + 1)
                 tmp_pos0 = trajectories1[-tmp_traj_len + i][0] * wt + trajectories2[i][0] * (1 - wt)
@@ -372,13 +383,12 @@ class ButtonController():
             tmp_traj = []
             start_pos = trajectories1[-1]
             end_pos = trajectories2[0]
+
             for i in range(tmp_traj_len):
                 tmp_pos0 = start_pos[0] + (end_pos[0] - start_pos[0]) * (i + 1) / (tmp_traj_len + 1)
                 tmp_pos1 = start_pos[1] + (end_pos[1] - start_pos[1]) * (i + 1) / (tmp_traj_len + 1)
                 tmp_traj.append([tmp_pos0, tmp_pos1])
             trajectories_new = trajectories1 + tmp_traj + trajectories2
-        
-        # trajectories_new = trajectories1[:startFrame - traj_start1] + trajectories2[startFrame - traj_start2:]
         
         self.backup()
         self.trajectory_manager.set_newValues(humanID1, traj_start1, trajectories_new)

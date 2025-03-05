@@ -1,4 +1,4 @@
-from utils.logging_utils import log_info
+from utils.logging_utils import log_info, log_debug
 from PyQt6.QtCore import pyqtSignal, QObject
 from copy import deepcopy
 
@@ -7,10 +7,9 @@ class TrajectoryManager(QObject):
     ID_selected = pyqtSignal(bool)
     updateFrame = pyqtSignal(int)
     
-    def __init__(self, human_config):
+    def __init__(self, human_config, parent = None):
+        super().__init__(parent)
         UNDO_LIMIT = 10
-
-        super().__init__()
         self.traj_starts = {}
         self.trajectories = {}
         self.selected_trajs = []
@@ -44,6 +43,7 @@ class TrajectoryManager(QObject):
 
         self.human_config.set_element(traj_id, "trajectories", new_trajectory)
         self.human_config.set_element(traj_id, "traj_start", start_frame)
+        self.human_config.set_element(traj_id, "human_context", "Adult")
         return traj_id
     
     def remove_trajectory(self, traj_id):
@@ -62,12 +62,15 @@ class TrajectoryManager(QObject):
         return active_trajectories
 
     def set_selected_trajectory(self, selected_traj_id):
-        if len(self.selected_trajs) < 2:
-            if selected_traj_id not in self.selected_trajs:
-                self.selected_trajs.append(selected_traj_id)
-                log_info(f"[DEBUG] Selected trajectories: {self.selected_trajs}")
-        else:
-            log_info("Two trajectories already selected. No more can be added.")
+        # one_selection_only = self.parent().view.one_selection_only     
+        # limit = 1 if one_selection_only else None
+            
+        # if limit is None or len(self.selected_trajs) < limit: 
+        if selected_traj_id not in self.selected_trajs:
+            self.selected_trajs.append(selected_traj_id)
+            log_debug(f"Selected trajectories: {self.selected_trajs}")
+        # else:
+            # log_debug("Two trajectories already selected. No more can be added.")
 
     def get_selected_trajectory(self):
         return list(self.selected_trajs)
@@ -81,6 +84,7 @@ class TrajectoryManager(QObject):
         
         self.human_config.set_element(traj_id, "traj_start", traj_start)
         self.human_config.set_element(traj_id, "trajectories", trajectories)
+        self.human_config.set_element(traj_id, "human_context", "Adult")
     
     def store_newTrajectory(self, new_x, new_y):
         if not self.trajectory_now:
@@ -101,7 +105,6 @@ class TrajectoryManager(QObject):
     def undo(self):
         if len(self.backup_data) == 0:
             log_info("No more backup data to undo.")
-            return
         (traj_starts_old, trajectories_old) = self.backup_data.pop(-1)
         self.traj_starts = traj_starts_old
         self.trajectories = trajectories_old

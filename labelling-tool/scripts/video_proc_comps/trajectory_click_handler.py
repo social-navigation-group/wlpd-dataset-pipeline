@@ -2,80 +2,88 @@ import numpy as np
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPen, QBrush
 from .playback_mode import PlaybackMode
-from utils.logging_utils import log_info, log_error
+from utils.logging_utils import log_info, log_error, log_debug
 from PyQt6.QtWidgets import QGraphicsView, QGraphicsPixmapItem, QGraphicsEllipseItem
 
 class TrajectoryClickHandler(QGraphicsView):
     def __init__(self, trajectory_manager, scene, trajectory_overlay, color_generator, parent = None):
         super().__init__(parent)
         self.current_frame = 0
+        self.main_window = None
+        self.fully_loaded = False
         self.graphics_scene = scene
-        self.dual_selection_enabled = False
+        # self.one_selection_only = False 
         self.color_generator = color_generator
         self.trajectory_manager = trajectory_manager 
         self.trajectory_overlay = trajectory_overlay
 
     def mousePressEvent(self, event):
         """Handles mouse click events and selects the closest trajectory."""
-        scene_pos = self.mapToScene(event.position().toPoint())
-        log_info(f"User clicked at Scene Coordinates: ({scene_pos.x()}, {scene_pos.y()})")
+        # This chain of parents is a lazy way to get to the main_window class from this class
+        self.fully_loaded = self.parent().parent().parent().parent().parent().fully_loaded
 
-        if self.trajectory_manager.isDrawing:
-            print(self.trajectory_manager.isDrawing)
-            self.draw_red_circles(scene_pos)
+        if self.fully_loaded: 
+            scene_pos = self.mapToScene(event.position().toPoint())
+            log_debug(f"User clicked at Scene Coordinates: ({scene_pos.x()}, {scene_pos.y()})")
 
-            for item in self.graphics_scene.items(scene_pos):
-                if isinstance(item, QGraphicsPixmapItem):
-                    pixmap_item = item
-                    pixmap_rect = pixmap_item.pixmap().rect()
-                    item_pos = pixmap_item.mapFromScene(scene_pos)
+            if self.trajectory_manager.isDrawing:
+                self.draw_red_circles(scene_pos)
 
-                    orig_x = int((item_pos.x() / pixmap_item.boundingRect().width()) * pixmap_rect.width())
-                    orig_y = int((item_pos.y() / pixmap_item.boundingRect().height()) * pixmap_rect.height())
-                    log_info(f"Mapped pixel coordinates: (x={orig_x}, y={orig_y})")
+                # Drawing finish when clicking at blank.
+                for item in self.graphics_scene.items(scene_pos):
+                    if isinstance(item, QGraphicsPixmapItem):
+                        pixmap_item = item
+                        pixmap_rect = pixmap_item.pixmap().rect()
+                        item_pos = pixmap_item.mapFromScene(scene_pos)
+
+                        orig_x = int((item_pos.x() / pixmap_item.boundingRect().width()) * pixmap_rect.width())
+                        orig_y = int((item_pos.y() / pixmap_item.boundingRect().height()) * pixmap_rect.height())
+                        log_info(f"Mapped pixel coordinates: (x = {orig_x}, y = {orig_y})")
+                        
+                        self.trajectory_manager.store_newTrajectory(orig_x, orig_y)
+                        self.trajectory_manager.updateFrame.emit(self.current_frame + 30)
+                        return
+                return
+
+            if self.trajectory_overlay is None:
+                log_error("ERROR: Click handler has no overlay assigned!")
+                return
+
+            found_trajectory = False
+            if self.trajectory_manager.isWaitingID:
+                for item in self.graphics_scene.items(scene_pos):
+                    if isinstance(item, QGraphicsPixmapItem):
+                        pixmap_item = item
+                        pixmap_rect = pixmap_item.pixmap().rect()
+                        item_pos = pixmap_item.mapFromScene(scene_pos)
+
+                        orig_x = int((item_pos.x() / pixmap_item.boundingRect().width()) * pixmap_rect.width())
+                        orig_y = int((item_pos.y() / pixmap_item.boundingRect().height()) * pixmap_rect.height())
+                        log_info(f"Mapped pixel coordinates: (x = {orig_x}, y = {orig_y})")
+
+                        selected_traj_id = self.get_trajectory_from_overlay(orig_x, orig_y)  
+
+                        if selected_traj_id is not None:
+                            log_info(f"Selected trajectory ID: {selected_traj_id}")
+                            
+                            # if self.one_selection_only:
+                                # self.trajectory_manager.clear_selection()
+                            self.trajectory_manager.set_selected_trajectory(selected_traj_id)
+
+                            if self.get_ui_class().button_controller.mode != 2:
+                                self.write_traj_id_on_input(str(selected_traj_id + 1))
+
+                            for item in self.graphics_scene.items():
+                                if isinstance(item, QGraphicsEllipseItem):
+                                    self.graphics_scene.removeItem(item)
+                            self.highlight_selected_trajectory(selected_traj_id) 
+                            
+                            found_trajectory = True
+                            break
                     
-                    self.trajectory_manager.store_newTrajectory(orig_x, orig_y)
-                    self.trajectory_manager.updateFrame.emit(self.current_frame + 30)
-                    return
-            return
-                    
-        if self.trajectory_overlay is None:
-            log_error("ERROR: Click handler has no overlay assigned!")
-            return
-
-        found_trajectory = False
-
-        for item in self.graphics_scene.items(scene_pos):
-            if isinstance(item, QGraphicsPixmapItem):
-                pixmap_item = item
-                pixmap_rect = pixmap_item.pixmap().rect()
-                item_pos = pixmap_item.mapFromScene(scene_pos)
-
-                orig_x = int((item_pos.x() / pixmap_item.boundingRect().width()) * pixmap_rect.width())
-                orig_y = int((item_pos.y() / pixmap_item.boundingRect().height()) * pixmap_rect.height())
-                log_info(f"Mapped pixel coordinates: (x={orig_x}, y={orig_y})")
-
-                selected_traj_id = self.get_trajectory_from_overlay(orig_x, orig_y)  
-
-                if selected_traj_id is not None:
-                    log_info(f"Selected trajectory ID: {selected_traj_id}")
-                    if self.trajectory_manager.isWaitingID:
-                        self.trajectory_manager.set_selected_trajectory(selected_traj_id)
-
-                        if self.get_ui_class().button_controller.mode != 2:
-                            self.write_traj_id_on_input(str(selected_traj_id + 1))
-
-                        for item in self.graphics_scene.items():
-                            if isinstance(item, QGraphicsEllipseItem):
-                                self.graphics_scene.removeItem(item)
-                    self.highlight_selected_trajectory(selected_traj_id)
-                    
-                    found_trajectory = True
-                    break 
-            
-        if not found_trajectory:
-            log_info("No trajectory selected, clearing highlight.")
-            self.clear_highlight()
+                if not found_trajectory:
+                    log_info("No trajectory selected, clearing highlight.")
+                    self.clear_highlight()
 
         super().mousePressEvent(event)
 
@@ -112,11 +120,10 @@ class TrajectoryClickHandler(QGraphicsView):
 
     def clear_highlight(self):
         """Removes the highlight when clicking outside a trajectory."""
-        log_info("[DEBUG] Clearing highlight")
-        log_info(f"[DEBUG] Current selected trajectory: {self.trajectory_manager.get_selected_trajectory()}")
+        log_info("Clearing highlight")
 
         if self.trajectory_manager.get_selected_trajectory() is None:
-            log_info("[DEBUG] No trajectory was highlighted, skipping clear.")
+            log_debug("No trajectory was highlighted, skipping clear.")
             return
         
         self.trajectory_manager.clear_selection()
@@ -124,7 +131,7 @@ class TrajectoryClickHandler(QGraphicsView):
 
     def refresh_frame_if_paused(self):
         if self.parent().playback_mode == PlaybackMode.STOPPED:
-            log_info("[DEBUG] Video is paused, refreshing frame.")
+            log_debug("Video is paused, refreshing frame.")
 
             if self.parent().current_frame < self.parent().total_frames - 1:
                 temp_frame = self.parent().current_frame + 1  

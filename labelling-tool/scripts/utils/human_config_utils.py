@@ -2,8 +2,11 @@ import toml
 from .logging_utils import log_info, log_warning
 
 class HumanConfigUtils():
-    def __init__(self, path):
-        self.dict = self.load_human_config(path)
+    def __init__(self):
+        self.human_traj_file = None
+
+    def start_human_traj(self):
+        self.dict = self.load_human_config(self.human_traj_file)
         self.used_indices = [int(key.replace("human", "")) for key in self.dict.keys()]
 
     def load_human_config(self, path):
@@ -36,8 +39,8 @@ class HumanConfigUtils():
         newHuman_name = f"human{newHuman_ID}"
         
         self.dict[newHuman_name] = {}
-        self.dict[newHuman_name]["trajectories"] = None
         self.dict[newHuman_name]["traj_start"] = None
+        self.dict[newHuman_name]["trajectories"] = None
         self.dict[newHuman_name]["human_context"] = None
         
         return newHuman_ID

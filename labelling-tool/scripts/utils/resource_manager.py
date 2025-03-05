@@ -28,8 +28,8 @@ class ResourceManager:
         """Returns the full path of the QSS stylesheet."""
         return os.path.join(self.resources_path, "styles.qss")
 
-    def get_human_config(self):
-        return os.path.join(self.config_path, "original_data", "example_small_data.toml") 
+    # def get_human_config(self):
+        # return os.path.join(self.config_path, "original_data", "example_small_data.toml") 
 
     def get_video(self, name):
         """Returns the path of the videos directory."""

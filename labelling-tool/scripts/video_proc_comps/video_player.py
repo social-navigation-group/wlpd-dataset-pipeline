@@ -9,7 +9,7 @@ from .trajectory_manager import TrajectoryManager
 from utils.human_config_utils import HumanConfigUtils
 from .trajectory_click_handler import TrajectoryClickHandler
 from utils.file_utils import is_valid_video_file, get_file_size
-from utils.logging_utils import log_info, log_warning, log_error
+from utils.logging_utils import log_info, log_warning, log_error, log_debug
 from utils.trajectory_color_generator import TrajectoryColorGenerator
 from PyQt6.QtWidgets import (
     QGraphicsScene, QGraphicsPixmapItem, QVBoxLayout, QWidget, QMessageBox, QSizePolicy
@@ -32,12 +32,8 @@ class VideoPlayer(QWidget):
         self.playback_mode = PlaybackMode.STOPPED 
         self.color_generator = TrajectoryColorGenerator()
 
-        self.human_config_path = self.resource_manager.get_human_config()
-        self.human_config = HumanConfigUtils(self.human_config_path)
-
-        self.trajectory_manager = TrajectoryManager(self.human_config)
-        self.trajectory_manager.set_trajectories()
-        
+        self.human_config = HumanConfigUtils()
+        self.trajectory_manager = TrajectoryManager(self.human_config, self)
         self.trajectory_manager.updateFrame.connect(self.show_frame_at)
 
         # TIMERS
@@ -61,7 +57,12 @@ class VideoPlayer(QWidget):
         layout = QVBoxLayout()
         layout.addWidget(self.view)
         self.setLayout(layout)
-    
+
+    def update_human_config(self, path):
+        self.human_config.human_traj_file = path
+        self.human_config.start_human_traj()
+        self.trajectory_manager.set_trajectories()
+
     def load_video(self, path):
         """Loads the video file and initializes the UI elements."""
         if not is_valid_video_file(path):
@@ -114,6 +115,8 @@ class VideoPlayer(QWidget):
         self.view.trajectory_overlay = self.trajectory_overlay
         self.show_frame_at(0)
 
+        QMessageBox.information(self, "Load Trajectories", "Before proceeding import the trajectory data that you want to label.")
+
     def update_frame(self):
         """Handles frame updates for play, rewind, and forward."""
         if not self.cap or not self.cap.isOpened():
@@ -131,9 +134,6 @@ class VideoPlayer(QWidget):
         else:
             self.timer.stop()
             return
-        
-        # if abs(new_frame - current_frame) > self.video_fps // 2:  # 
-            # self.cap.set(cv2.CAP_PROP_POS_FRAMES, new_frame)
 
         self.current_frame = new_frame
         self.view.current_frame = self.current_frame 
@@ -177,7 +177,7 @@ class VideoPlayer(QWidget):
 
     def update_trajectory_overlay(self, overlay):
         self.trajectory_overlay = np.copy(overlay)
-        log_info(f"[DEBUG] After updating, trajectory_overlay np.sum: {np.sum(self.trajectory_overlay)}")
+        log_debug(f"After updating, trajectory_overlay np.sum: {np.sum(self.trajectory_overlay)}")
 
         self.view.trajectory_overlay = self.trajectory_overlay
 
@@ -197,7 +197,7 @@ class VideoPlayer(QWidget):
             lastest_overlay = np.copy(overlay)
             overlayed_frame = cv2.addWeighted(frame, 1, lastest_overlay, 1.0, 0)
 
-            log_info(f"[DEBUG] After blending, overlayed_frame np.sum: {np.sum(overlayed_frame)}")
+            log_debug(f"After blending, overlayed_frame np.sum: {np.sum(overlayed_frame)}")
 
             height, width, _ = overlayed_frame.shape
             bytes_per_line = 3 * width
@@ -210,7 +210,7 @@ class VideoPlayer(QWidget):
                 return
 
             self.pixmap_item.setPixmap(pixmap)
-            log_info(f"[DEBUG] Updating display with overlay sum: {np.sum(self.trajectory_overlay)}")
+            log_debug(f"Updating display with overlay sum: {np.sum(self.trajectory_overlay)}")
             self.graphics_scene.setSceneRect(0, 0, pixmap.width(), pixmap.height())
             self.view.fitInView(self.pixmap_item, Qt.AspectRatioMode.KeepAspectRatio)
 

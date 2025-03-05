@@ -1,5 +1,6 @@
-from PyQt6.QtWidgets import QMessageBox, QCheckBox, QVBoxLayout, QWidget
 from PyQt6.QtCore import QSettings
+from .logging_utils import log_debug
+from PyQt6.QtWidgets import QMessageBox, QCheckBox, QVBoxLayout, QWidget
 
 class PersistentMessageBox(QMessageBox):
     SETTINGS_GROUP = "PersistentMessages"
@@ -10,10 +11,10 @@ class PersistentMessageBox(QMessageBox):
         self.settings = QSettings("Miraikan", "Labeling_Tool_App")
         self.message_id = message_id
 
-        print(f"Checking setting for {self.message_id}: {self.settings.value(f'{self.SETTINGS_GROUP}/{self.message_id}', 'false')}")
+        log_debug(f"Checking setting for {self.message_id}: {self.settings.value(f'{self.SETTINGS_GROUP}/{self.message_id}', 'false')}")
         
         if self.settings.value(f"{self.SETTINGS_GROUP}/{self.message_id}", "false") == "true":
-            print(f"Skipping message: {self.message_id}")
+            log_debug(f"Skipping message: {self.message_id}")
             return
 
         self.setWindowTitle(title)
@@ -34,7 +35,7 @@ class PersistentMessageBox(QMessageBox):
         
         if result == QMessageBox.StandardButton.Ok and self.checkbox.isChecked():
             self.settings.setValue(f"{self.SETTINGS_GROUP}/{self.message_id}", "true")
-            print(f"Saved setting: {self.SETTINGS_GROUP}/{self.message_id} -> true")
+            log_debug(f"Saved setting: {self.SETTINGS_GROUP}/{self.message_id} -> true")
 
     @staticmethod
     def show_message(parent, message_id, title, text, icon = QMessageBox.Icon.Information):

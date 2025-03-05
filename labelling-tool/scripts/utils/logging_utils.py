@@ -34,3 +34,7 @@ def log_error(message: str):
     """Logs an error-level message."""
     app_logger.error(message)
 
+def log_debug(message: str):
+    """Logs an debug-level message."""
+    app_logger.debug(message)
+

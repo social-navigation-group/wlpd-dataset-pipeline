@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QPushButton
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton
 
 class HumanControls(QWidget):
     def __init__(self, video_player, parent: QWidget):

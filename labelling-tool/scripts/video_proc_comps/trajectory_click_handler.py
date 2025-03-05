@@ -65,10 +65,14 @@ class TrajectoryClickHandler(QGraphicsView):
 
                         if selected_traj_id is not None:
                             log_info(f"Selected trajectory ID: {selected_traj_id}")
+
+                            trajectory = np.array(self.trajectory_manager.trajectories[selected_traj_id])
+                            select_idx = np.argmin(np.linalg.norm(trajectory - [orig_x, orig_y], axis=1))
+                            select_frame = select_idx + self.trajectory_manager.traj_starts[selected_traj_id]
                             
                             # if self.one_selection_only:
                                 # self.trajectory_manager.clear_selection()
-                            self.trajectory_manager.set_selected_trajectory(selected_traj_id)
+                            self.trajectory_manager.set_selected_trajectory(selected_traj_id, select_frame)
 
                             if self.get_ui_class().button_controller.mode != 2:
                                 self.write_traj_id_on_input(str(selected_traj_id + 1))

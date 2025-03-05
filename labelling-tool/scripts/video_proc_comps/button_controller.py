@@ -191,19 +191,19 @@ class ButtonController():
             
                 # Break
                 elif self.mode == 3:
-                    self.break_func(selected_IDs[0], self.startFrame)
+                    self.break_func(selected_IDs[0][0], selected_IDs[0][1])
                 
                 # Join
                 elif self.mode == 4:
-                    self.join_func(selected_IDs[0], selected_IDs[1])
+                    self.join_func(selected_IDs[0][0], selected_IDs[1][0])
                     
                 # Delete
                 elif self.mode == 5:
-                    self.delete_func(selected_IDs[0])
+                    self.delete_func(selected_IDs[0][0])
                 
                 # Disentangle
                 elif self.mode == 6:
-                    self.disentangle_func(selected_IDs[0], selected_IDs[1], self.startFrame)
+                    self.disentangle_func(selected_IDs[0][0], selected_IDs[1][0], selected_IDs[1][1])
                 
                 # self.video_player.show_frame_at(edit_frame)
                 # self.trajectory_manager.updateFrame.emit(edit_frame)
@@ -332,6 +332,9 @@ class ButtonController():
     def break_func(self, humanID, startFrame):
         """Break function: break into 2 trajectory 
            (former ID is same as old one and latter one is added as new)."""
+        if startFrame == None:
+            QMessageBox.warning(self.trajectory_controls, "Warning", "Please select the frame where you want to break the trajectory.")
+            return
         traj_start_old = self.trajectory_manager.traj_starts[humanID]
         trajectories_old = self.trajectory_manager.trajectories[humanID]
         
@@ -409,6 +412,10 @@ class ButtonController():
     
     def disentangle_func(self, humanID1, humanID2, startFrame):
         """Disentangle function: swap two trajectories after the startFrame"""
+        if startFrame == None:
+            QMessageBox.warning(self.trajectory_controls, "Warning", "Please select the frame where you want to break the trajectory.")
+            return
+        
         traj_start1 = self.trajectory_manager.traj_starts[humanID1]
         trajectories1 = self.trajectory_manager.trajectories[humanID1]
         

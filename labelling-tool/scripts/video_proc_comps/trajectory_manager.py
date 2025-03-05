@@ -61,13 +61,13 @@ class TrajectoryManager(QObject):
 
         return active_trajectories
 
-    def set_selected_trajectory(self, selected_traj_id):
+    def set_selected_trajectory(self, selected_traj_id, selected_frame=None):
         # one_selection_only = self.parent().view.one_selection_only     
         # limit = 1 if one_selection_only else None
             
         # if limit is None or len(self.selected_trajs) < limit: 
         if selected_traj_id not in self.selected_trajs:
-            self.selected_trajs.append(selected_traj_id)
+            self.selected_trajs.append((selected_traj_id, selected_frame))
             log_debug(f"Selected trajectories: {self.selected_trajs}")
         # else:
             # log_debug("Two trajectories already selected. No more can be added.")
